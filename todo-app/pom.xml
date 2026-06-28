@@ -127,6 +127,15 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- SpringDoc OpenAPI: auto-generates OpenAPI 3 spec from Spring MVC code.
+             Serves Swagger UI at /swagger-ui.html and the raw spec at /v3/api-docs.
+             Use this for Spring Boot 3.x — NOT Springfox (incompatible with Boot 3). -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+
     </dependencies>
 
     <build>

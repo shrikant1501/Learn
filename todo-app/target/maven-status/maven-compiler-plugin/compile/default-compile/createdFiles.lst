@@ -10,6 +10,7 @@ com\learnjava\todo\dto\request\CreateTodoRequest$CreateTodoRequestBuilder.class
 com\learnjava\todo\TodoApplication.class
 com\learnjava\todo\service\TodoService.class
 com\learnjava\todo\service\TodoMapper.class
+com\learnjava\todo\config\OpenApiConfig.class
 com\learnjava\todo\repository\TodoRepository.class
 com\learnjava\todo\dto\request\CreateTodoRequest.class
 com\learnjava\todo\exception\GlobalExceptionHandler.class
