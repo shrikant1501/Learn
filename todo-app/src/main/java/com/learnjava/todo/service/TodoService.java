@@ -3,32 +3,21 @@ package com.learnjava.todo.service;
 import com.learnjava.todo.model.Todo;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Contract for all Todo business operations.
  *
  * <p>
- * This is an interface, not a class. This is a deliberate architectural choice.
+ * This interface defines the full CRUD surface for the Todo resource.
+ * The controller depends ONLY on this interface — it has zero awareness
+ * of whether the data comes from memory, a database, or a remote API.
  *
  * <p>
- * <strong>Why an interface?</strong>
- * <ol>
- *   <li><strong>Dependency Inversion Principle (SOLID - D):</strong> High-level modules
- *       (Controller) should not depend on low-level modules (ServiceImpl). Both should
- *       depend on abstractions (this interface).</li>
- *   <li><strong>Testability:</strong> In unit tests, you can inject a mock of this
- *       interface into the controller without needing a real implementation. This is
- *       the foundation of clean unit testing.</li>
- *   <li><strong>Flexibility:</strong> You can have multiple implementations —
- *       e.g., {@code InMemoryTodoService} for now, and {@code DatabaseTodoService}
- *       later — and swap them with a single annotation change.</li>
- *   <li><strong>Clear contract:</strong> The interface documents exactly what operations
- *       are available, without exposing implementation details.</li>
- * </ol>
- *
- * <p>
- * The controller will only ever know about this interface.
- * It will never import or reference {@code TodoServiceImpl}.
+ * Notice the use of {@code Optional<Todo>} for single-item retrieval and update.
+ * This is the modern Java way to express "this operation might not find anything."
+ * It forces callers to explicitly handle the "not found" case, eliminating
+ * the risk of silent {@code NullPointerException}s.
  */
 public interface TodoService {
 
@@ -38,4 +27,45 @@ public interface TodoService {
      * @return a list of all todos; never null, may be empty
      */
     List<Todo> getAllTodos();
+
+    /**
+     * Retrieves a single todo by its unique identifier.
+     *
+     * @param id the ID to look up
+     * @return an Optional containing the todo if found, or empty if not found
+     */
+    Optional<Todo> getTodoById(Long id);
+
+    /**
+     * Creates a new todo item.
+     *
+     * <p>
+     * The caller should NOT provide an ID — the service assigns one.
+     * This mirrors how real databases work: you insert data, the DB generates the key.
+     *
+     * @param todo the todo data to persist (id field is ignored/overwritten)
+     * @return the created todo with its assigned ID
+     */
+    Todo createTodo(Todo todo);
+
+    /**
+     * Replaces an existing todo item entirely.
+     *
+     * <p>
+     * This is a full replacement (PUT semantics), not a partial update (PATCH semantics).
+     * Every field in the provided {@code todo} overwrites the stored value.
+     *
+     * @param id   the ID of the todo to update
+     * @param todo the new data to store
+     * @return an Optional containing the updated todo if found, or empty if not found
+     */
+    Optional<Todo> updateTodo(Long id, Todo todo);
+
+    /**
+     * Deletes a todo item by its ID.
+     *
+     * @param id the ID of the todo to delete
+     * @return {@code true} if the todo existed and was deleted, {@code false} if not found
+     */
+    boolean deleteTodo(Long id);
 }
