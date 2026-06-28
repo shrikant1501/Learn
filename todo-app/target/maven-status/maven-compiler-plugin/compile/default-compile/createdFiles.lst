@@ -2,5 +2,9 @@ com\learnjava\todo\model\Todo.class
 com\learnjava\todo\service\TodoService.class
 com\learnjava\todo\controller\TodoController.class
 com\learnjava\todo\model\Todo$TodoBuilder.class
+com\learnjava\todo\exception\TodoNotFoundException.class
+com\learnjava\todo\exception\GlobalExceptionHandler.class
 com\learnjava\todo\service\impl\TodoServiceImpl.class
 com\learnjava\todo\TodoApplication.class
+com\learnjava\todo\exception\ErrorResponse$ErrorResponseBuilder.class
+com\learnjava\todo\exception\ErrorResponse.class

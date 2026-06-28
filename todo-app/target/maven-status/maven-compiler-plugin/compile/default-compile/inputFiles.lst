@@ -1,5 +1,8 @@
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\model\Todo.java
+C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\exception\TodoNotFoundException.java
+C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\exception\GlobalExceptionHandler.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\TodoApplication.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\service\TodoService.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\service\impl\TodoServiceImpl.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\controller\TodoController.java
+C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\exception\ErrorResponse.java

@@ -1,5 +1,6 @@
 package com.learnjava.todo.controller;
 
+import com.learnjava.todo.exception.TodoNotFoundException;
 import com.learnjava.todo.model.Todo;
 import com.learnjava.todo.service.TodoService;
 import lombok.RequiredArgsConstructor;
@@ -81,9 +82,15 @@ public class TodoController {
     @GetMapping("/{id}")
     public ResponseEntity<Todo> getTodoById(@PathVariable Long id) {
         log.info("GET /api/v1/todos/{}", id);
-        return todoService.getTodoById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        /*
+         * orElseThrow() — if the Optional is empty, throw the exception.
+         * If it has a value, unwrap and return it.
+         * The controller no longer needs to know about 404 responses at all —
+         * GlobalExceptionHandler intercepts the exception and builds the 404.
+         */
+        Todo todo = todoService.getTodoById(id)
+                .orElseThrow(() -> new TodoNotFoundException(id));
+        return ResponseEntity.ok(todo);
     }
 
     // =========================================================================
@@ -155,9 +162,9 @@ public class TodoController {
     @PutMapping("/{id}")
     public ResponseEntity<Todo> updateTodo(@PathVariable Long id, @RequestBody Todo todo) {
         log.info("PUT /api/v1/todos/{}", id);
-        return todoService.updateTodo(id, todo)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        Todo updated = todoService.updateTodo(id, todo)
+                .orElseThrow(() -> new TodoNotFoundException(id));
+        return ResponseEntity.ok(updated);
     }
 
     // =========================================================================
@@ -185,9 +192,14 @@ public class TodoController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTodo(@PathVariable Long id) {
         log.info("DELETE /api/v1/todos/{}", id);
-        if (todoService.deleteTodo(id)) {
-            return ResponseEntity.noContent().build();  // 204
+        /*
+         * deleteTodo returns false if the ID didn't exist.
+         * We throw our custom exception — GlobalExceptionHandler returns 404.
+         * The controller is pure happy-path code.
+         */
+        if (!todoService.deleteTodo(id)) {
+            throw new TodoNotFoundException(id);
         }
-        return ResponseEntity.notFound().build();       // 404
+        return ResponseEntity.noContent().build();  // 204
     }
 }
