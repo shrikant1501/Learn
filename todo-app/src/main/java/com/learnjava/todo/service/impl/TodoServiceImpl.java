@@ -4,162 +4,90 @@ import com.learnjava.todo.dto.request.CreateTodoRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.model.Todo;
+import com.learnjava.todo.repository.TodoRepository;
 import com.learnjava.todo.service.TodoMapper;
 import com.learnjava.todo.service.TodoService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * In-memory implementation of {@link TodoService}.
- *
- * <p>
- * <strong>Phase 4 change:</strong> The service now uses {@link TodoMapper} to
- * convert between the {@link Todo} domain model and DTOs. The internal store
- * still holds {@code Todo} objects — that is the private implementation detail.
- * What changes externally (across the service boundary) are the DTOs.
- *
- * <p>
- * Notice the clear separation of concerns inside each method:
- * <ol>
- *   <li>Convert inbound DTO → domain model (via mapper)</li>
- *   <li>Execute business logic on domain model</li>
- *   <li>Convert result domain model → response DTO (via mapper)</li>
- *   <li>Return the response DTO</li>
- * </ol>
- * The controller above this layer only ever sees DTOs.
- * The store below this layer only ever holds {@code Todo} domain objects.
- * This class is the translator between the two worlds.
- */
 @Slf4j
 @Service
+// @Transactional at class level — every public method runs inside a DB transaction.
+// If a method throws a RuntimeException, Hibernate rolls back all DB changes made in that call.
+// read-only methods should override with @Transactional(readOnly = true) for a performance hint.
+@Transactional
 public class TodoServiceImpl implements TodoService {
 
-    private final Map<Long, Todo> store = new HashMap<>();
-    private final AtomicLong idSequence = new AtomicLong(1);
+    // Constructor injection — same pattern as the controller.
+    // TodoRepository is injected by Spring; we never instantiate it ourselves.
+    private final TodoRepository todoRepository;
 
-    public TodoServiceImpl() {
-        Todo todo1 = Todo.builder()
-                .id(idSequence.getAndIncrement())
-                .title("Learn Spring Boot")
-                .description("Complete Phase 4 of the todo project")
-                .completed(false)
-                .build();
-
-        Todo todo2 = Todo.builder()
-                .id(idSequence.getAndIncrement())
-                .title("Understand Dependency Injection")
-                .description("Learn how Spring manages beans and wires dependencies")
-                .completed(false)
-                .build();
-
-        Todo todo3 = Todo.builder()
-                .id(idSequence.getAndIncrement())
-                .title("Read about REST principles")
-                .description("Understand statelessness, uniform interface, and resource naming")
-                .completed(true)
-                .build();
-
-        store.put(todo1.getId(), todo1);
-        store.put(todo2.getId(), todo2);
-        store.put(todo3.getId(), todo3);
-
-        log.debug("In-memory store initialised with {} todos", store.size());
+    public TodoServiceImpl(TodoRepository todoRepository) {
+        this.todoRepository = todoRepository;
     }
 
-    /**
-     * Fetches all todos from the store and converts each to a response DTO.
-     * Stream + map + toList() is the idiomatic Java way to transform a collection.
-     */
+    // readOnly = true tells Hibernate: "this transaction will not modify data".
+    // Hibernate skips dirty-checking (scanning for changed fields) — a performance gain.
+    // Always use readOnly on GET-style service methods.
     @Override
+    @Transactional(readOnly = true)
     public List<TodoResponse> getAllTodos() {
-        log.debug("Fetching all todos. Current store size: {}", store.size());
-        return TodoMapper.toResponseList(new ArrayList<>(store.values()));
+        log.debug("Fetching all todos");
+        // findAll() → SELECT * FROM todos — returns List<Todo>
+        // TodoMapper.toResponseList() converts each Todo to TodoResponse via streams
+        return TodoMapper.toResponseList(todoRepository.findAll());
     }
 
-    /**
-     * Looks up a todo by ID and wraps the mapped response in an Optional.
-     * If the ID is not found, store.get() returns null → Optional.empty().
-     * If found, the Todo is mapped to TodoResponse → Optional.of(response).
-     */
     @Override
+    @Transactional(readOnly = true)
     public Optional<TodoResponse> getTodoById(Long id) {
         log.debug("Looking up todo with id: {}", id);
-        return Optional.ofNullable(store.get(id))
+        // findById() → SELECT * FROM todos WHERE id = ?
+        // Returns Optional<Todo> — empty if no row found.
+        // .map(TodoMapper::toResponse) converts Todo → TodoResponse if present.
+        return todoRepository.findById(id)
                 .map(TodoMapper::toResponse);
     }
 
-    /**
-     * Converts the request DTO to a domain model, assigns a fresh ID,
-     * stores it, and returns the mapped response DTO.
-     *
-     * <p>
-     * Notice the flow:
-     * CreateTodoRequest → TodoMapper.toModel() → Todo (no ID yet)
-     * → assign ID → store → TodoMapper.toResponse() → TodoResponse
-     */
     @Override
     public TodoResponse createTodo(CreateTodoRequest request) {
-        long newId = idSequence.getAndIncrement();
-
-        /*
-         * toModel() produces a Todo without an ID.
-         * We then build the final stored Todo by setting the generated ID.
-         * Why not set the ID inside toModel()? Because the mapper should not
-         * know about ID generation — that is the service's responsibility.
-         */
+        log.debug("Creating todo with title: {}", request.getTitle());
+        // Convert request DTO → domain model (no id yet — DB assigns it)
         Todo todo = TodoMapper.toModel(request);
-        Todo savedTodo = Todo.builder()
-                .id(newId)
-                .title(todo.getTitle())
-                .description(todo.getDescription())
-                .completed(todo.getCompleted())
-                .build();
-
-        store.put(newId, savedTodo);
-        log.debug("Created todo with id: {}", newId);
-        return TodoMapper.toResponse(savedTodo);
+        // save() on a new entity (id == null) → INSERT INTO todos (...)
+        // Hibernate populates the id field on the returned object after the insert.
+        Todo saved = todoRepository.save(todo);
+        log.debug("Created todo with id: {}", saved.getId());
+        return TodoMapper.toResponse(saved);
     }
 
-    /**
-     * Converts the update request + URL id to a domain model, replaces the
-     * stored entry, and returns the mapped response DTO.
-     */
     @Override
     public Optional<TodoResponse> updateTodo(Long id, UpdateTodoRequest request) {
         log.debug("Attempting to update todo with id: {}", id);
-
-        if (!store.containsKey(id)) {
-            log.debug("Todo with id {} not found for update", id);
+        // existsById() → SELECT COUNT(*) > 0 FROM todos WHERE id = ?
+        // Cheaper than findById() when we only need to check existence.
+        if (!todoRepository.existsById(id)) {
             return Optional.empty();
         }
-
-        /*
-         * toModel(id, request) passes the URL-path ID explicitly to the mapper.
-         * The mapper stamps it onto the built Todo. The request body's id (if any)
-         * is structurally absent from UpdateTodoRequest — it can't sneak in.
-         */
-        Todo updatedTodo = TodoMapper.toModel(id, request);
-        store.put(id, updatedTodo);
-        log.debug("Updated todo with id: {}", id);
-        return Optional.of(TodoMapper.toResponse(updatedTodo));
+        // toModel(id, request) builds a Todo with the URL-path id stamped on it.
+        // save() on an entity WITH an id → UPDATE todos SET ... WHERE id = ?
+        Todo updated = todoRepository.save(TodoMapper.toModel(id, request));
+        return Optional.of(TodoMapper.toResponse(updated));
     }
 
     @Override
     public boolean deleteTodo(Long id) {
         log.debug("Attempting to delete todo with id: {}", id);
-        boolean existed = store.remove(id) != null;
-        if (existed) {
-            log.debug("Deleted todo with id: {}", id);
-        } else {
-            log.debug("Todo with id {} not found for deletion", id);
+        // existsById first, then delete — gives us the boolean result the controller needs.
+        if (!todoRepository.existsById(id)) {
+            return false;
         }
-        return existed;
+        // deleteById() → DELETE FROM todos WHERE id = ?
+        todoRepository.deleteById(id);
+        return true;
     }
 }
