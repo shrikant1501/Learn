@@ -5,6 +5,7 @@ import com.learnjava.todo.dto.request.UpdateTodoRequest;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.exception.TodoNotFoundException;
 import com.learnjava.todo.service.TodoService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -82,7 +83,10 @@ public class TodoController {
      * The security improvement is structural — enforced by the type system.
      */
     @PostMapping
-    public ResponseEntity<TodoResponse> createTodo(@RequestBody CreateTodoRequest request) {
+    // @Valid tells Spring: run Bean Validation on this parameter before calling this method.
+    // If any @NotBlank or @Size constraint fails, Spring throws MethodArgumentNotValidException
+    // immediately — the method body never executes. GlobalExceptionHandler catches it.
+    public ResponseEntity<TodoResponse> createTodo(@Valid @RequestBody CreateTodoRequest request) {
         log.info("POST /api/v1/todos - title: {}", request.getTitle());
         TodoResponse created = todoService.createTodo(request);
 
@@ -102,7 +106,7 @@ public class TodoController {
     @PutMapping("/{id}")
     public ResponseEntity<TodoResponse> updateTodo(
             @PathVariable Long id,
-            @RequestBody UpdateTodoRequest request) {
+            @Valid @RequestBody UpdateTodoRequest request) {
         log.info("PUT /api/v1/todos/{}", id);
         TodoResponse updated = todoService.updateTodo(id, request)
                 .orElseThrow(() -> new TodoNotFoundException(id));

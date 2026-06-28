@@ -5,11 +5,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Global exception handler for all REST controllers.
@@ -47,6 +51,41 @@ import java.time.LocalDateTime;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // =========================================================================
+    // 400 VALIDATION FAILED — @Valid constraint violations
+    // =========================================================================
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request) {
+
+        // ex.getBindingResult().getFieldErrors() returns one FieldError per violated constraint.
+        // We collect them into a Map<fieldName, errorMessage> for a clean response.
+        // If the same field fails two constraints, the last one wins (Collectors.toMap merge fn).
+        Map<String, String> fieldErrors = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .collect(Collectors.toMap(
+                        FieldError::getField,             // key:   "title"
+                        FieldError::getDefaultMessage,    // value: "Title must not be blank"
+                        (existing, replacement) -> existing  // keep first message if field has multiple violations
+                ));
+
+        log.warn("Validation failed at {}: {}", request.getRequestURI(), fieldErrors);
+
+        ErrorResponse body = ErrorResponse.builder()
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("VALIDATION_FAILED")
+                .message("Request validation failed")
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .errors(fieldErrors)
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
 
     // =========================================================================
     // 404 NOT FOUND — TodoNotFoundException

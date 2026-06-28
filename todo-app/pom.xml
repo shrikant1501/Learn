@@ -119,6 +119,14 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Bean Validation (JSR-380): @NotBlank, @Size, @NotNull, @Email, etc.
+             Bundles Hibernate Validator (the reference implementation) + Jakarta Validation API.
+             This is the standard way to declare input constraints in Spring Boot. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>
