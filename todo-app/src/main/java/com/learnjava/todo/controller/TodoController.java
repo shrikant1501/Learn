@@ -1,7 +1,9 @@
 package com.learnjava.todo.controller;
 
+import com.learnjava.todo.dto.request.CreateTodoRequest;
+import com.learnjava.todo.dto.request.UpdateTodoRequest;
+import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.exception.TodoNotFoundException;
-import com.learnjava.todo.model.Todo;
 import com.learnjava.todo.service.TodoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,16 +25,16 @@ import java.util.List;
  * REST Controller for Todo resources.
  *
  * <p>
- * This controller exposes the full CRUD surface for the Todo resource.
- * It is a pure HTTP adapter — it:
- * <ol>
- *   <li>Receives HTTP requests</li>
- *   <li>Extracts data from the request (path variables, body)</li>
- *   <li>Delegates ALL logic to {@link TodoService}</li>
- *   <li>Translates the service result into the correct HTTP response</li>
- * </ol>
- * There is zero business logic here. No if-statements deciding what a "valid" todo is.
- * The controller's only decisions are: "what HTTP status does this service result map to?"
+ * <strong>Phase 4 change:</strong> The controller now works exclusively with DTOs.
+ * Notice what is NOT imported here: {@code com.learnjava.todo.model.Todo}.
+ * The controller has zero knowledge of the domain model — it only knows about
+ * the shapes of data coming in ({@code CreateTodoRequest}, {@code UpdateTodoRequest})
+ * and going out ({@code TodoResponse}).
+ *
+ * <p>
+ * This is the clean architecture boundary enforced by the type system.
+ * The compiler itself prevents the controller from accidentally accessing
+ * any domain model fields or JPA annotations that will appear in Phase 5.
  */
 @Slf4j
 @RestController
@@ -46,13 +48,8 @@ public class TodoController {
     // GET /api/v1/todos
     // =========================================================================
 
-    /**
-     * Retrieves all todo items.
-     *
-     * @return 200 OK with the list of all todos (empty list if none exist)
-     */
     @GetMapping
-    public ResponseEntity<List<Todo>> getAllTodos() {
+    public ResponseEntity<List<TodoResponse>> getAllTodos() {
         log.info("GET /api/v1/todos");
         return ResponseEntity.ok(todoService.getAllTodos());
     }
@@ -61,36 +58,12 @@ public class TodoController {
     // GET /api/v1/todos/{id}
     // =========================================================================
 
-    /**
-     * Retrieves a single todo by ID.
-     *
-     * <p>
-     * <strong>{@code @PathVariable} explained:</strong><br>
-     * Binds the {id} segment from the URL to the {@code id} method parameter.
-     * Spring automatically converts the String from the URL to {@code Long}.
-     * If the conversion fails (e.g. "/todos/abc"), Spring returns 400 Bad Request.
-     *
-     * <p>
-     * <strong>Pattern: Optional → ResponseEntity</strong><br>
-     * {@code map(ResponseEntity::ok)} — if the Optional has a value, wrap it in 200 OK.
-     * {@code orElse(ResponseEntity.notFound().build())} — if empty, return 404.
-     * This is clean, functional, and requires no if-else.
-     *
-     * @param id the ID of the todo to retrieve
-     * @return 200 OK with the todo, or 404 Not Found
-     */
     @GetMapping("/{id}")
-    public ResponseEntity<Todo> getTodoById(@PathVariable Long id) {
+    public ResponseEntity<TodoResponse> getTodoById(@PathVariable Long id) {
         log.info("GET /api/v1/todos/{}", id);
-        /*
-         * orElseThrow() — if the Optional is empty, throw the exception.
-         * If it has a value, unwrap and return it.
-         * The controller no longer needs to know about 404 responses at all —
-         * GlobalExceptionHandler intercepts the exception and builds the 404.
-         */
-        Todo todo = todoService.getTodoById(id)
+        TodoResponse response = todoService.getTodoById(id)
                 .orElseThrow(() -> new TodoNotFoundException(id));
-        return ResponseEntity.ok(todo);
+        return ResponseEntity.ok(response);
     }
 
     // =========================================================================
@@ -98,40 +71,21 @@ public class TodoController {
     // =========================================================================
 
     /**
-     * Creates a new todo item.
+     * Creates a new todo.
      *
      * <p>
-     * <strong>{@code @RequestBody} explained:</strong><br>
-     * Jackson deserializes the JSON request body into a {@code Todo} object.
-     * For example: {@code {"title": "Buy milk", "completed": false}}
-     * becomes a {@code Todo} instance with those fields set.
-     *
-     * <p>
-     * <strong>Why 201 and a Location header?</strong><br>
-     * HTTP spec (RFC 7231) says: a POST that creates a resource SHOULD return
-     * 201 Created AND a Location header pointing to the new resource's URL.
-     * This allows clients to immediately fetch or bookmark the new resource
-     * without needing to parse the response body.
-     *
-     * <p>
-     * {@code ServletUriComponentsBuilder} builds the Location URI relative to
-     * the current request URL, so it works regardless of host/port/context path.
-     * Example result: {@code Location: http://localhost:8080/api/v1/todos/4}
-     *
-     * @param todo the todo data from the request body (id field is ignored)
-     * @return 201 Created with the created todo and a Location header
+     * The method parameter is now {@code CreateTodoRequest} — not {@code Todo}.
+     * This means the JSON body the client sends is structurally limited to
+     * just {title, description, completed}. There is no {@code id} field.
+     * Even if a client sends {@code "id": 999}, Jackson ignores it because
+     * {@code CreateTodoRequest} has no {@code id} field to map it to.
+     * The security improvement is structural — enforced by the type system.
      */
     @PostMapping
-    public ResponseEntity<Todo> createTodo(@RequestBody Todo todo) {
-        log.info("POST /api/v1/todos - title: {}", todo.getTitle());
-        Todo created = todoService.createTodo(todo);
+    public ResponseEntity<TodoResponse> createTodo(@RequestBody CreateTodoRequest request) {
+        log.info("POST /api/v1/todos - title: {}", request.getTitle());
+        TodoResponse created = todoService.createTodo(request);
 
-        /*
-         * Build the URI for the Location header:
-         * Start from current request URI (/api/v1/todos)
-         * Append /{id} with the new todo's ID
-         * Result: /api/v1/todos/4
-         */
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
                 .path("/{id}")
@@ -145,24 +99,12 @@ public class TodoController {
     // PUT /api/v1/todos/{id}
     // =========================================================================
 
-    /**
-     * Replaces an existing todo entirely.
-     *
-     * <p>
-     * <strong>PUT vs PATCH:</strong><br>
-     * PUT = full replacement. Every field in the body replaces the stored value.
-     * PATCH = partial update. Only specified fields are changed.
-     * We implement PUT here (full replacement) — simpler and most common in REST APIs.
-     * PATCH would be implemented in a later phase if needed.
-     *
-     * @param id   the ID of the todo to update (from URL path)
-     * @param todo the new data for the todo (from request body)
-     * @return 200 OK with the updated todo, or 404 Not Found
-     */
     @PutMapping("/{id}")
-    public ResponseEntity<Todo> updateTodo(@PathVariable Long id, @RequestBody Todo todo) {
+    public ResponseEntity<TodoResponse> updateTodo(
+            @PathVariable Long id,
+            @RequestBody UpdateTodoRequest request) {
         log.info("PUT /api/v1/todos/{}", id);
-        Todo updated = todoService.updateTodo(id, todo)
+        TodoResponse updated = todoService.updateTodo(id, request)
                 .orElseThrow(() -> new TodoNotFoundException(id));
         return ResponseEntity.ok(updated);
     }
@@ -171,35 +113,12 @@ public class TodoController {
     // DELETE /api/v1/todos/{id}
     // =========================================================================
 
-    /**
-     * Deletes a todo by ID.
-     *
-     * <p>
-     * <strong>Why 204 No Content?</strong><br>
-     * After deletion, there is nothing to return. The resource is gone.
-     * 204 is the honest status code: "I did the work, there's nothing to say."
-     * The response has no body.
-     *
-     * <p>
-     * <strong>Why {@code ResponseEntity<Void>}?</strong><br>
-     * {@code Void} is a type that can only be null — it signals "no body."
-     * Using {@code ResponseEntity<?>} (wildcard) would also work, but
-     * {@code Void} is more precise about the intent.
-     *
-     * @param id the ID of the todo to delete
-     * @return 204 No Content if deleted, or 404 Not Found if it didn't exist
-     */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTodo(@PathVariable Long id) {
         log.info("DELETE /api/v1/todos/{}", id);
-        /*
-         * deleteTodo returns false if the ID didn't exist.
-         * We throw our custom exception — GlobalExceptionHandler returns 404.
-         * The controller is pure happy-path code.
-         */
         if (!todoService.deleteTodo(id)) {
             throw new TodoNotFoundException(id);
         }
-        return ResponseEntity.noContent().build();  // 204
+        return ResponseEntity.noContent().build();
     }
 }
