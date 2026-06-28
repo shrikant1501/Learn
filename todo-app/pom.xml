@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        PARENT: Spring Boot's parent POM.
+        This gives us:
+          - Pre-configured dependency versions (no version conflicts)
+          - Default plugin configuration
+          - Common properties like Java version handling
+        Think of it as inheriting from a well-maintained base configuration.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.5</version>
+        <relativePath/>
+    </parent>
+
+    <!--
+        PROJECT COORDINATES: The unique identity of this project in the Maven world.
+        groupId    → Your organization/domain (reversed), like a Java package root
+        artifactId → The name of this specific project/module
+        version    → Current version. SNAPSHOT means "in development, not released"
+        packaging  → jar = self-contained executable JAR (Spring Boot default)
+    -->
+    <groupId>com.learnjava</groupId>
+    <artifactId>todo-app</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>todo-app</name>
+    <description>Spring Boot Todo Application - Learning Project</description>
+
+    <properties>
+        <!--
+            Java version. Spring Boot 3.x requires Java 17+.
+            We use 21 (current LTS). You have Java 25 installed, which is
+            forward-compatible with Java 21 compiled bytecode.
+            Java 21 is what you'll encounter in most enterprise environments today.
+        -->
+        <java.version>21</java.version>
+        <!--
+            We pin the Lombok version explicitly here so we can reference it
+            in the annotationProcessorPaths section of the compiler plugin.
+            Spring Boot's parent POM manages Lombok's version, and we can
+            read that managed version via ${lombok.version}.
+        -->
+        <!--
+            Lombok 1.18.38 is the latest release with improved Java 23/24/25 compatibility.
+            Earlier versions fail with TypeTag::UNKNOWN errors because Lombok
+            uses internal javac APIs that changed in Java 23+.
+        -->
+        <lombok.version>1.18.38</lombok.version>
+    </properties>
+
+    <dependencies>
+
+        <!--
+            SPRING BOOT WEB STARTER
+            This single dependency pulls in everything needed for a REST API:
+              - Spring MVC (the web framework)
+              - Tomcat (the embedded web server — no separate server needed)
+              - Jackson (JSON serialization/deserialization)
+            This is the magic of "starters" — they are curated dependency bundles.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+            LOMBOK
+            A compile-time annotation processor that generates boilerplate code:
+              - @Getter / @Setter → generates getters and setters
+              - @NoArgsConstructor → generates no-arg constructor
+              - @AllArgsConstructor → generates all-args constructor
+              - @Builder → implements the Builder pattern
+              - @Data → combines @Getter, @Setter, @EqualsAndHashCode, @ToString
+            Without Lombok, every model class would have 50+ lines of boilerplate.
+            With Lombok, it's clean and focused on the data, not the plumbing.
+            "provided" scope means it's only needed at compile time, not at runtime.
+        -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
+            SPRING BOOT TEST STARTER
+            Everything needed for testing:
+              - JUnit 5 (the test framework)
+              - Mockito (mocking framework)
+              - Spring Test (integration testing utilities)
+            "test" scope means this is ONLY available during test compilation and execution.
+            It will NOT be in your production JAR.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                MAVEN COMPILER PLUGIN
+                Explicitly configures Java compilation.
+                We must declare Lombok as an annotation processor here because
+                Lombok works at compile time — it hooks into the Java compiler (javac)
+                to generate code (getters, builders, loggers, etc.) BEFORE the compiler
+                runs its normal type-checking pass.
+                Without this, on modern Java versions, the compiler never invokes
+                Lombok and it produces "cannot find symbol" errors for generated code.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!--
+                        Java 23+ locks down internal JDK APIs by default (JEP 471).
+                        Lombok uses sun.tools.javac internals to do its code generation.
+                        We must open these packages to the unnamed module so Lombok
+                        can access them at compile time. Without this, we get the
+                        ExceptionInInitializerError: TypeTag::UNKNOWN error on Java 23+.
+                        This is a compile-time-only flag — it has no effect at runtime.
+                    -->
+                    <compilerArgs>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
+                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED</arg>
+                    </compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <!--
+                                We must provide an explicit version here because
+                                annotationProcessorPaths are resolved independently
+                                from the regular dependency management section.
+                                Spring Boot's BOM version management does not apply here.
+                            -->
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <!--
+                SPRING BOOT MAVEN PLUGIN
+                This plugin does one critical thing: it packages your application
+                into a "fat JAR" (also called an uber-JAR or executable JAR).
+                A fat JAR contains:
+                  - Your compiled code
+                  - ALL dependencies (including Tomcat)
+                  - A manifest pointing to the main class
+                Result: you can run your entire app with: java -jar todo-app.jar
+                This is how Spring Boot apps are deployed in production.
+            -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!--
+                        Exclude Lombok from the final JAR.
+                        Lombok only does its work at compile time (generating code).
+                        The generated code is already in the bytecode.
+                        Including Lombok at runtime would waste space and could cause issues.
+                    -->
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
