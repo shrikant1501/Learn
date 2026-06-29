@@ -1,6 +1,7 @@
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\test\java\com\learnjava\todo\integration\TodoIntegrationTest.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\test\java\com\learnjava\todo\integration\AuthIntegrationTest.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\test\java\com\learnjava\todo\service\TodoServiceImplTest.java
+C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\test\java\com\learnjava\todo\config\RedisCacheConfigTest.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\test\java\com\learnjava\todo\actuator\TodoHealthIndicatorTest.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\test\java\com\learnjava\todo\integration\AbstractIntegrationTest.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\test\java\com\learnjava\todo\service\TodoMapperTest.java

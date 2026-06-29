@@ -1,3 +1,4 @@
+com\learnjava\todo\config\RedisCacheConfig.class
 com\learnjava\todo\config\SecurityConfig.class
 com\learnjava\todo\controller\TodoController.class
 com\learnjava\todo\model\Auditable.class

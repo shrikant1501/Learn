@@ -6,15 +6,24 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 import java.util.concurrent.TimeUnit;
 
+// @Profile("default"): this configuration is only active when NO explicit profile is set.
+// "default" is Spring's special keyword for "no profile was activated".
+// This covers: running tests (mvn test), running the app with just java -jar (no -Dspring.profiles.active).
+//
+// When SPRING_PROFILES_ACTIVE=local or docker, this class is skipped entirely —
+// RedisCacheConfig.java takes over and provides the CacheManager bean instead.
+//
 // @EnableCaching: the master switch for Spring's cache abstraction.
 // Without this annotation, ALL @Cacheable / @CacheEvict / @CachePut annotations
 // are completely ignored — no error, no warning, just no caching.
 // This is the same pattern as @EnableMethodSecurity for @PreAuthorize.
 @Configuration
 @EnableCaching
+@Profile("default")
 public class CacheConfig {
 
     // Cache name constant — used in @Cacheable annotations on TodoServiceImpl.

@@ -228,6 +228,18 @@
         </dependency>
 
         <!--
+            SPRING DATA REDIS: Spring's integration layer for Redis.
+            Provides RedisTemplate, RedisCacheManager, and auto-configuration.
+            Includes Lettuce (the default async Redis client) — no separate client needed.
+            Used in the local and docker profiles to back the Spring Cache abstraction.
+            Version managed by Spring Boot's BOM.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!--
             CAFFEINE: high-performance in-memory cache for the JVM.
             Implements the W-TinyLFU eviction algorithm — near-optimal hit rate.
             Spring Boot's CaffeineCacheManager auto-configures when Caffeine is on the

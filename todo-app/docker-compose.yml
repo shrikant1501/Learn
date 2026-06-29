@@ -47,6 +47,30 @@ services:
       retries: 5
 
   # ============================================================
+  # Redis — distributed cache (Phase 19)
+  # ============================================================
+  redis:
+    # redis:7-alpine — Redis 7 on Alpine Linux (~10MB image).
+    # We pin the major version so we don't get surprise upgrades.
+    image: redis:7-alpine
+
+    container_name: todo-redis
+
+    # Expose Redis on the standard port.
+    # Left side = host port (localhost:6379 for local redis-cli).
+    # Right side = container port.
+    ports:
+      - "6379:6379"
+
+    # Health check — wait until Redis responds to PING before
+    # dependent services start. 'redis-cli ping' returns PONG when ready.
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
   # Spring Boot App — the todo-app service
   # ============================================================
   app:
@@ -57,18 +81,18 @@ services:
 
     container_name: todo-app
 
-    # The app depends on postgres being healthy before it starts.
-    # Spring Boot will still retry the DB connection, but this gives
-    # Postgres time to initialise before the JVM boots.
+    # The app depends on both postgres AND redis being healthy before it starts.
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
     ports:
       - "8080:8080"
 
-    # Pass database config to the Spring Boot app as environment variables.
-    # Spring Boot reads SPRING_DATASOURCE_URL etc. automatically —
+    # Pass database and cache config to the Spring Boot app as environment variables.
+    # Spring Boot reads SPRING_DATASOURCE_URL, SPRING_DATA_REDIS_HOST etc. automatically —
     # they override application.properties values at runtime.
     # This is the 12-factor app pattern: config comes from the environment.
     environment:
@@ -77,6 +101,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: todo_pass
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+      # 'redis' resolves to the Redis container via Docker's internal DNS
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       # Tell Spring Boot to use the 'docker' profile — picks up application-docker.properties
       SPRING_PROFILES_ACTIVE: docker
 
