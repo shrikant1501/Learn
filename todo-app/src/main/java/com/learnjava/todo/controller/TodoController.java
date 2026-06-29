@@ -1,7 +1,9 @@
 package com.learnjava.todo.controller;
 
 import com.learnjava.todo.dto.request.CreateTodoRequest;
+import com.learnjava.todo.dto.request.TodoFilterRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
+import com.learnjava.todo.dto.response.PagedResponse;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.exception.TodoNotFoundException;
 import com.learnjava.todo.service.TodoService;
@@ -13,9 +15,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -25,7 +31,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
-import java.util.List;
 
 // @Tag groups this controller under a named section in Swagger UI
 // Without @Tag, SpringDoc uses the class name — less readable
@@ -42,13 +47,26 @@ public class TodoController {
     // GET /api/v1/todos
     // =========================================================================
 
-    // @Operation — the short summary shown next to the endpoint in Swagger UI
-    @Operation(summary = "Get all todos", description = "Returns a list of all todo items. Empty list if none exist.")
-    @ApiResponse(responseCode = "200", description = "Successfully retrieved list")
+    @Operation(
+        summary = "Get todos",
+        description = "Returns a paginated, sortable list of todos with optional filtering by status and keyword search."
+    )
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved page of todos")
     @GetMapping
-    public ResponseEntity<List<TodoResponse>> getAllTodos() {
-        log.info("GET /api/v1/todos");
-        return ResponseEntity.ok(todoService.getAllTodos());
+    public ResponseEntity<PagedResponse<TodoResponse>> getTodos(
+            // @ModelAttribute binds multiple query params into one object automatically.
+            // ?completed=true&search=spring → TodoFilterRequest{completed=true, search="spring"}
+            @ModelAttribute TodoFilterRequest filter,
+
+            // @PageableDefault sets the defaults when client doesn't specify.
+            // ?page=0&size=10&sort=id,asc — these become the fallbacks.
+            // Client can override any of these: ?size=20&sort=title,desc
+            @PageableDefault(size = 10, sort = "id", direction = Sort.Direction.ASC)
+            Pageable pageable) {
+
+        log.info("GET /api/v1/todos — page: {}, size: {}, filter: {}",
+                pageable.getPageNumber(), pageable.getPageSize(), filter);
+        return ResponseEntity.ok(todoService.getTodos(filter, pageable));
     }
 
     // =========================================================================

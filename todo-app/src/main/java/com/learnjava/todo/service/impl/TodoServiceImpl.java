@@ -1,17 +1,22 @@
 package com.learnjava.todo.service.impl;
 
 import com.learnjava.todo.dto.request.CreateTodoRequest;
+import com.learnjava.todo.dto.request.TodoFilterRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
+import com.learnjava.todo.dto.response.PagedResponse;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.model.Todo;
 import com.learnjava.todo.repository.TodoRepository;
 import com.learnjava.todo.service.TodoMapper;
 import com.learnjava.todo.service.TodoService;
+import com.learnjava.todo.service.TodoSpecification;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -30,16 +35,20 @@ public class TodoServiceImpl implements TodoService {
         this.todoRepository = todoRepository;
     }
 
-    // readOnly = true tells Hibernate: "this transaction will not modify data".
-    // Hibernate skips dirty-checking (scanning for changed fields) — a performance gain.
-    // Always use readOnly on GET-style service methods.
     @Override
     @Transactional(readOnly = true)
-    public List<TodoResponse> getAllTodos() {
-        log.debug("Fetching all todos");
-        // findAll() → SELECT * FROM todos — returns List<Todo>
-        // TodoMapper.toResponseList() converts each Todo to TodoResponse via streams
-        return TodoMapper.toResponseList(todoRepository.findAll());
+    public PagedResponse<TodoResponse> getTodos(TodoFilterRequest filter, Pageable pageable) {
+        log.debug("Fetching todos — filter: {}, page: {}, size: {}",
+                filter, pageable.getPageNumber(), pageable.getPageSize());
+
+        // Build the Specification from filter params (null conditions are ignored)
+        Specification<Todo> spec = TodoSpecification.fromFilter(filter);
+
+        // findAll(spec, pageable) → SELECT ... FROM todos WHERE ... LIMIT ? OFFSET ?
+        // Returns Page<Todo> which contains: content list + total count + page metadata
+        Page<Todo> page = todoRepository.findAll(spec, pageable);
+
+        return TodoMapper.toPagedResponse(page);
     }
 
     @Override

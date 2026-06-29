@@ -2,8 +2,10 @@ package com.learnjava.todo.service;
 
 import com.learnjava.todo.dto.request.CreateTodoRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
+import com.learnjava.todo.dto.response.PagedResponse;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.model.Todo;
+import org.springframework.data.domain.Page;
 
 import java.util.List;
 
@@ -137,5 +139,19 @@ public final class TodoMapper {
         return todos.stream()
                 .map(TodoMapper::toResponse)
                 .toList();
+    }
+
+    // Converts a Spring Data Page<Todo> into our PagedResponse<TodoResponse> wrapper.
+    // Page<Todo> contains the content list + all pagination metadata.
+    // We map the content to DTOs and copy the metadata — clean separation.
+    public static PagedResponse<TodoResponse> toPagedResponse(Page<Todo> page) {
+        return PagedResponse.<TodoResponse>builder()
+                .content(toResponseList(page.getContent()))
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .build();
     }
 }

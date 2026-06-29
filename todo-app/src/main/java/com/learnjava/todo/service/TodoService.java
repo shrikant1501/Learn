@@ -1,10 +1,12 @@
 package com.learnjava.todo.service;
 
 import com.learnjava.todo.dto.request.CreateTodoRequest;
+import com.learnjava.todo.dto.request.TodoFilterRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
+import com.learnjava.todo.dto.response.PagedResponse;
 import com.learnjava.todo.dto.response.TodoResponse;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -32,11 +34,13 @@ import java.util.Optional;
 public interface TodoService {
 
     /**
-     * Retrieves all todo items.
+     * Retrieves a filtered, sorted, paginated page of todos.
      *
-     * @return a list of response DTOs; never null, may be empty
+     * @param filter   optional filters (completed status, search keyword)
+     * @param pageable pagination and sorting parameters
+     * @return a page of response DTOs with pagination metadata
      */
-    List<TodoResponse> getAllTodos();
+    PagedResponse<TodoResponse> getTodos(TodoFilterRequest filter, Pageable pageable);
 
     /**
      * Retrieves a single todo by its unique identifier.

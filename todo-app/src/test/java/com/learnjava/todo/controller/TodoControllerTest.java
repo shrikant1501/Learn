@@ -2,7 +2,9 @@ package com.learnjava.todo.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learnjava.todo.dto.request.CreateTodoRequest;
+import com.learnjava.todo.dto.request.TodoFilterRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
+import com.learnjava.todo.dto.response.PagedResponse;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.exception.TodoNotFoundException;
 import com.learnjava.todo.service.TodoService;
@@ -12,13 +14,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -74,28 +76,40 @@ class TodoControllerTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("GET /api/v1/todos: returns 200 with list of todos")
-    void getAllTodos_returns200WithList() throws Exception {
-        when(todoService.getAllTodos()).thenReturn(List.of(sampleResponse));
+    @DisplayName("GET /api/v1/todos: returns 200 with paged response")
+    void getTodos_returns200WithPagedResponse() throws Exception {
+        PagedResponse<TodoResponse> pagedResponse = PagedResponse.<TodoResponse>builder()
+                .content(List.of(sampleResponse))
+                .page(0).size(10).totalElements(1).totalPages(1).last(true)
+                .build();
+
+        when(todoService.getTodos(any(TodoFilterRequest.class), any(Pageable.class)))
+                .thenReturn(pagedResponse);
 
         mockMvc.perform(get("/api/v1/todos"))
                 .andExpect(status().isOk())
-                // jsonPath("$") — root of the JSON response
-                // jsonPath("$", hasSize(1)) — the root array has 1 element
-                .andExpect(jsonPath("$", hasSize(1)))
-                // jsonPath("$[0].id") — first element's id field
-                .andExpect(jsonPath("$[0].id", is(1)))
-                .andExpect(jsonPath("$[0].title", is("Learn Spring Boot")));
+                // Response is now a PagedResponse object, not a plain array
+                .andExpect(jsonPath("$.content[0].id", is(1)))
+                .andExpect(jsonPath("$.content[0].title", is("Learn Spring Boot")))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.totalPages", is(1)))
+                .andExpect(jsonPath("$.last", is(true)));
     }
 
     @Test
-    @DisplayName("GET /api/v1/todos: returns 200 with empty list when no todos")
-    void getAllTodos_returns200WithEmptyList() throws Exception {
-        when(todoService.getAllTodos()).thenReturn(List.of());
+    @DisplayName("GET /api/v1/todos: returns 200 with empty paged response")
+    void getTodos_returns200WithEmptyPage() throws Exception {
+        PagedResponse<TodoResponse> emptyPage = PagedResponse.<TodoResponse>builder()
+                .content(List.of()).page(0).size(10).totalElements(0).totalPages(0).last(true)
+                .build();
+
+        when(todoService.getTodos(any(TodoFilterRequest.class), any(Pageable.class)))
+                .thenReturn(emptyPage);
 
         mockMvc.perform(get("/api/v1/todos"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.totalElements", is(0)));
     }
 
     // -----------------------------------------------------------------------

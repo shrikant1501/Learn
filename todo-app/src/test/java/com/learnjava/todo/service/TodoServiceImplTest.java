@@ -1,7 +1,9 @@
 package com.learnjava.todo.service;
 
 import com.learnjava.todo.dto.request.CreateTodoRequest;
+import com.learnjava.todo.dto.request.TodoFilterRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
+import com.learnjava.todo.dto.response.PagedResponse;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.model.Todo;
 import com.learnjava.todo.repository.TodoRepository;
@@ -13,6 +15,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
 import java.util.Optional;
@@ -59,31 +66,37 @@ class TodoServiceImplTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("getAllTodos: returns mapped response list when todos exist")
-    void getAllTodos_returnsMappedList() {
-        // ARRANGE — tell the mock what to return when findAll() is called
-        when(todoRepository.findAll()).thenReturn(List.of(sampleTodo));
+    @DisplayName("getTodos: returns paged response with content when todos exist")
+    void getTodos_returnsMappedPagedResponse() {
+        Pageable pageable = PageRequest.of(0, 10);
+        // PageImpl simulates a database page result with content + total count
+        Page<Todo> mockPage = new PageImpl<>(List.of(sampleTodo), pageable, 1);
 
-        // ACT — call the real service method
-        List<TodoResponse> result = todoService.getAllTodos();
+        when(todoRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(mockPage);
 
-        // ASSERT — verify the result
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getId()).isEqualTo(1L);
-        assertThat(result.get(0).getTitle()).isEqualTo("Learn Spring Boot");
+        PagedResponse<TodoResponse> result = todoService.getTodos(new TodoFilterRequest(), pageable);
 
-        // VERIFY — assert that findAll() was actually called on the repository
-        verify(todoRepository).findAll();
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).getTitle()).isEqualTo("Learn Spring Boot");
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getTotalPages()).isEqualTo(1);
+        assertThat(result.isLast()).isTrue();
     }
 
     @Test
-    @DisplayName("getAllTodos: returns empty list when no todos exist")
-    void getAllTodos_returnsEmptyList() {
-        when(todoRepository.findAll()).thenReturn(List.of());
+    @DisplayName("getTodos: returns empty paged response when no todos exist")
+    void getTodos_returnsEmptyPagedResponse() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Todo> emptyPage = new PageImpl<>(List.of(), pageable, 0);
 
-        List<TodoResponse> result = todoService.getAllTodos();
+        when(todoRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(emptyPage);
 
-        assertThat(result).isEmpty();
+        PagedResponse<TodoResponse> result = todoService.getTodos(new TodoFilterRequest(), pageable);
+
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isEqualTo(0);
     }
 
     // -----------------------------------------------------------------------
