@@ -9,6 +9,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -23,8 +24,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 // @EnableWebSecurity activates Spring Security's web support.
 // Without this, adding spring-boot-starter-security just enables basic auth on everything.
 // With this, we take full control of the filter chain.
+//
+// @EnableMethodSecurity: activates @PreAuthorize, @PostAuthorize, @Secured on any @Bean.
+// prePostEnabled=true (the default) enables the @PreAuthorize / @PostAuthorize annotations.
+// Without this annotation, @PreAuthorize is silently ignored — no error, no protection.
+// This is the most common security misconfiguration bug in Spring Boot applications.
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 

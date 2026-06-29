@@ -2,6 +2,8 @@ package com.learnjava.todo.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -12,6 +14,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
@@ -45,15 +48,26 @@ public class User extends Auditable implements UserDetails {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String password;
 
+    // role determines what this user is allowed to do.
+    // @Enumerated(STRING) stores "USER" or "ADMIN" as text in the DB column.
+    // NOT NULL — every user must have a role; defaults to USER in AuthServiceImpl.
+    // @Builder.Default — tells Lombok's builder to use this value when .role() is omitted.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private Role role = Role.USER;
+
     // -----------------------------------------------------------------------
     // UserDetails contract — Spring Security reads these methods
     // -----------------------------------------------------------------------
 
-    // Roles/authorities this user has. We keep it simple — no roles yet (Phase 18 adds RBAC).
-    // Returning an empty list means the user is authenticated but has no specific roles.
+    // getAuthorities() is what Spring Security calls to evaluate @PreAuthorize.
+    // We wrap our Role enum in a SimpleGrantedAuthority with the "ROLE_" prefix.
+    // Spring Security's hasRole('ADMIN') checks for an authority named "ROLE_ADMIN".
+    // Example: Role.ADMIN → SimpleGrantedAuthority("ROLE_ADMIN")
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of();
+        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 
     // These four methods let Spring Security know the account is fully active.

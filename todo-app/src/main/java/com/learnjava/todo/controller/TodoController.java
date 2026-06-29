@@ -7,6 +7,7 @@ import com.learnjava.todo.dto.response.PagedResponse;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.exception.TodoNotFoundException;
 import com.learnjava.todo.service.TodoService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -138,11 +139,21 @@ public class TodoController {
     // DELETE /api/v1/todos/{id}
     // =========================================================================
 
-    @Operation(summary = "Delete a todo", description = "Permanently deletes a todo item by ID.")
+    @Operation(summary = "Delete a todo", description = "Permanently deletes a todo item by ID. Requires ADMIN role.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Todo deleted — no content returned"),
+        @ApiResponse(responseCode = "403", description = "Access denied — ADMIN role required"),
         @ApiResponse(responseCode = "404", description = "Todo not found")
     })
+    // @PreAuthorize is evaluated BEFORE the method body executes.
+    // Spring Security reads the current user's authorities from the SecurityContext
+    // (populated by JwtAuthenticationFilter) and checks for the ROLE_ADMIN authority.
+    // If the check fails, Spring throws AccessDeniedException → 403 Forbidden.
+    // If the check passes, execution continues into the method body normally.
+    //
+    // hasRole('ADMIN') is shorthand for hasAuthority('ROLE_ADMIN').
+    // Spring Security automatically prepends 'ROLE_' when using hasRole().
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTodo(
             @Parameter(description = "The ID of the todo to delete", example = "1")

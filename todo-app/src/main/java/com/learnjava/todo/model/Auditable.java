@@ -5,7 +5,9 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -44,4 +46,18 @@ public abstract class Auditable {
     @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    // @CreatedBy — populated once on INSERT with the username from AuditorAware.
+    // nullable = true: seed data rows (inserted by Flyway with no authentication context)
+    // will have null here. User-created rows will have the creator's username.
+    // updatable = false: like createdAt, the creator cannot be changed after creation.
+    @CreatedBy
+    @Column(updatable = false)
+    private String createdBy;
+
+    // @LastModifiedBy — updated on every INSERT and UPDATE with the current username.
+    // Lets you audit: "who last touched this record and when?"
+    @LastModifiedBy
+    @Column
+    private String lastModifiedBy;
 }

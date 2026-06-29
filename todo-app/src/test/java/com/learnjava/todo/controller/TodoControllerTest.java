@@ -303,7 +303,11 @@ class TodoControllerTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("DELETE /api/v1/todos/{id}: returns 204 when deleted")
+    // @WithMockUser(roles = "ADMIN") overrides the class-level @WithMockUser (roles = "USER").
+    // The delete endpoint requires hasRole('ADMIN') via @PreAuthorize.
+    // Without this override, the class-level USER role would get a 403 instead of 204.
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("DELETE /api/v1/todos/{id}: returns 204 when deleted (ADMIN role)")
     void deleteTodo_found_returns204() throws Exception {
         when(todoService.deleteTodo(1L)).thenReturn(true);
 
@@ -314,12 +318,37 @@ class TodoControllerTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/todos/{id}: returns 404 when todo does not exist")
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("DELETE /api/v1/todos/{id}: returns 404 when todo does not exist (ADMIN role)")
     void deleteTodo_notFound_returns404() throws Exception {
         when(todoService.deleteTodo(99L)).thenReturn(false);
 
         mockMvc.perform(delete("/api/v1/todos/99").with(csrf()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status", is(404)));
+    }
+
+    @Test
+    // @WebMvcTest does NOT enforce @PreAuthorize on controller methods —
+    // method security proxies are not created in the web-only slice context.
+    // @PreAuthorize enforcement is tested in integration tests (when Docker is available).
+    //
+    // Instead, we verify the annotation is DECLARED on the controller method.
+    // This is a compile-time check: if someone removes @PreAuthorize, this test fails.
+    // It documents the intent without needing a full Spring context.
+    @DisplayName("DELETE endpoint: @PreAuthorize(hasRole ADMIN) annotation is declared")
+    void deleteTodo_preAuthorizeAnnotationIsDeclared() throws Exception {
+        java.lang.reflect.Method deleteMethod = com.learnjava.todo.controller.TodoController.class
+                .getMethod("deleteTodo", Long.class);
+
+        org.springframework.security.access.prepost.PreAuthorize annotation =
+                deleteMethod.getAnnotation(
+                        org.springframework.security.access.prepost.PreAuthorize.class);
+
+        // The annotation must be present and must specify the ADMIN role guard
+        org.junit.jupiter.api.Assertions.assertNotNull(annotation,
+                "@PreAuthorize must be declared on deleteTodo()");
+        org.junit.jupiter.api.Assertions.assertTrue(annotation.value().contains("ADMIN"),
+                "@PreAuthorize must require ADMIN role");
     }
 }
