@@ -1,6 +1,7 @@
 com\learnjava\todo\config\RedisCacheConfig.class
 com\learnjava\todo\config\SecurityConfig.class
 com\learnjava\todo\controller\TodoController.class
+com\learnjava\todo\security\SecurityUtilImpl.class
 com\learnjava\todo\model\Auditable.class
 com\learnjava\todo\dto\request\CreateTodoRequest$CreateTodoRequestBuilder.class
 com\learnjava\todo\dto\auth\LoginRequest.class
@@ -31,6 +32,7 @@ com\learnjava\todo\exception\InvalidRefreshTokenException.class
 com\learnjava\todo\TodoApplication.class
 com\learnjava\todo\dto\response\PagedResponse.class
 com\learnjava\todo\config\JpaConfig.class
+com\learnjava\todo\security\SecurityUtil.class
 com\learnjava\todo\exception\GlobalExceptionHandler.class
 com\learnjava\todo\model\Role.class
 com\learnjava\todo\dto\auth\RefreshTokenRequest.class

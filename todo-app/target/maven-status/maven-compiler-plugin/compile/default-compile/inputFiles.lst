@@ -5,6 +5,7 @@ C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\config\SecurityConfig.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\dto\auth\LoginRequest.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\service\impl\TodoServiceImpl.java
+C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\security\SecurityUtilImpl.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\model\Todo.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\dto\request\TodoFilterRequest.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\service\TodoService.java
@@ -37,4 +38,5 @@ C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\controller\TodoController.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\service\TodoSpecification.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\dto\request\UpdateTodoRequest.java
+C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\security\SecurityUtil.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\model\User.java

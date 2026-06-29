@@ -53,6 +53,7 @@ public interface TodoMapper {
     // by Spring's AuditingEntityListener via @CreatedDate / @LastModifiedDate.
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "completed", defaultValue = "false")
+    @Mapping(target = "owner", ignore = true)  // owner is set by the service after mapping
     Todo toModel(CreateTodoRequest request);
 
     // =========================================================================
@@ -75,14 +76,17 @@ public interface TodoMapper {
     //   The id lives in the URL path, not in the request body. We must NOT
     //   let UpdateTodoRequest accidentally overwrite the entity's id.
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "owner", ignore = true)  // owner is immutable — never changed by an update
     void updateModel(@MappingTarget Todo todo, UpdateTodoRequest request);
 
     // =========================================================================
     // Todo → TodoResponse (outbound)
     // =========================================================================
 
-    // All fields (id, title, description, completed, createdAt, updatedAt) match
-    // by name between Todo (via Auditable) and TodoResponse.
-    // MapStruct maps them all automatically — no @Mapping annotations needed.
+    // Map Todo → TodoResponse.
+    // Most fields match by name automatically. The one exception:
+    //   todo.owner.username → ownedBy  (nested source path → flat target field)
+    // MapStruct generates a null-safe traversal: if owner is null, ownedBy is set to null.
+    @Mapping(source = "owner.username", target = "ownedBy")
     TodoResponse toResponse(Todo todo);
 }

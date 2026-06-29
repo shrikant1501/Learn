@@ -2,69 +2,71 @@ package com.learnjava.todo.service;
 
 import com.learnjava.todo.dto.request.TodoFilterRequest;
 import com.learnjava.todo.model.Todo;
+import com.learnjava.todo.model.User;
 import org.springframework.data.jpa.domain.Specification;
 
-// A factory class that builds JPA Specification objects from filter parameters.
+// Factory class that builds JPA Specification objects from filter parameters.
 // Each static method returns one Specification (one WHERE clause fragment).
-// The caller combines them with .and() to build the full query dynamically.
-//
-// Why Specification instead of derived query methods?
-// Derived methods are static — findByCompletedAndTitleContaining() is fixed.
-// With optional filters, you'd need a method for every combination:
-//   findByCompleted()
-//   findByTitleContaining()
-//   findByCompletedAndTitleContaining()  ← explosion as filters grow
-//
-// Specification composes at runtime — you only add predicates for filters
-// that are actually provided. Zero duplication.
+// Callers combine them with .and() to build the full query dynamically.
 public class TodoSpecification {
 
     private TodoSpecification() {}
 
-    // Returns a Specification that filters by completed status.
-    // A Specification is a functional interface: (root, query, criteriaBuilder) -> Predicate
-    //   root          = the FROM clause (represents the Todo entity)
-    //   query         = the full query being built
-    //   criteriaBuilder = factory for building predicates (like a SQL expression builder)
+    // Filters by completed status: WHERE completed = ?
     public static Specification<Todo> hasCompleted(Boolean completed) {
         return (root, query, cb) ->
-                // cb.equal() generates: WHERE completed = ?
                 cb.equal(root.get("completed"), completed);
     }
 
-    // Returns a Specification that searches title OR description for a keyword.
-    // cb.lower() makes the comparison case-insensitive.
-    // cb.like() generates a LIKE clause.
-    // cb.or() combines the two predicates with OR.
+    // Searches title OR description for a keyword (case-insensitive):
+    // WHERE LOWER(title) LIKE ? OR LOWER(description) LIKE ?
     public static Specification<Todo> hasSearchTerm(String search) {
         return (root, query, cb) -> {
             String pattern = "%" + search.toLowerCase() + "%";
             return cb.or(
-                    // WHERE LOWER(title) LIKE '%keyword%'
                     cb.like(cb.lower(root.get("title")), pattern),
-                    // OR LOWER(description) LIKE '%keyword%'
                     cb.like(cb.lower(root.get("description")), pattern)
             );
         };
     }
 
-    // Builds a combined Specification from a filter request.
-    // Only adds predicates for filters that are actually present.
-    // Returns null if no filters are set — findAll(null, pageable) works correctly
-    // in Spring Data (null Specification = no WHERE clause = return everything).
-    public static Specification<Todo> fromFilter(TodoFilterRequest filter) {
-        Specification<Todo> spec = Specification.where(null); // start with no conditions
+    // Filters to only the given user's todos: WHERE user_id = ?
+    // Used when the current user is a regular USER (not ADMIN).
+    // ADMIN callers pass null for owner → this predicate is not added.
+    //
+    // Why use root.get("owner") instead of root.get("user_id")?
+    // In JPA Criteria API, you navigate by ENTITY field name ("owner"), not by
+    // the DB column name ("user_id"). JPA translates the join to the FK column.
+    public static Specification<Todo> hasOwner(User owner) {
+        return (root, query, cb) ->
+                cb.equal(root.get("owner"), owner);
+    }
+
+    // Builds a combined Specification from a filter request and optional owner.
+    // owner = null  → ADMIN caller, no ownership filter (sees all todos)
+    // owner = User  → regular USER caller, restricted to their own todos only
+    public static Specification<Todo> fromFilter(TodoFilterRequest filter, User owner) {
+        Specification<Todo> spec = Specification.where(null);
+
+        // Scope to current user's todos — skip for ADMIN (owner == null)
+        if (owner != null) {
+            spec = spec.and(hasOwner(owner));
+        }
 
         if (filter.getCompleted() != null) {
-            // .and() appends: AND completed = ?
             spec = spec.and(hasCompleted(filter.getCompleted()));
         }
 
         if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
-            // .and() appends: AND (LOWER(title) LIKE ? OR LOWER(description) LIKE ?)
             spec = spec.and(hasSearchTerm(filter.getSearch()));
         }
 
         return spec;
+    }
+
+    // Backward-compatible overload used by existing unit tests (no owner filter).
+    // Delegates to the main method with owner = null (ADMIN behaviour).
+    public static Specification<Todo> fromFilter(TodoFilterRequest filter) {
+        return fromFilter(filter, null);
     }
 }

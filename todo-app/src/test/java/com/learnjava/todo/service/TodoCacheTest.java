@@ -2,8 +2,11 @@ package com.learnjava.todo.service;
 
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
 import com.learnjava.todo.dto.response.TodoResponse;
+import com.learnjava.todo.model.Role;
 import com.learnjava.todo.model.Todo;
+import com.learnjava.todo.model.User;
 import com.learnjava.todo.repository.TodoRepository;
+import com.learnjava.todo.security.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,7 +65,11 @@ class TodoCacheTest {
     @MockBean
     private TodoRepository todoRepository;
 
-    // We also need to mock these beans that are part of the full context
+    // Mock SecurityUtil so TodoServiceImpl doesn't try to read from an empty SecurityContext.
+    // All cache tests run as a USER — isAdmin()=false, getCurrentUser()=cacheTestUser.
+    @MockBean
+    private SecurityUtil securityUtil;
+
     @MockBean
     private com.learnjava.todo.security.JwtService jwtService;
 
@@ -72,9 +79,15 @@ class TodoCacheTest {
     private CacheManager cacheManager;
 
     private Todo sampleTodo;
+    private User cacheTestUser;
 
     @BeforeEach
     void setUp() {
+        cacheTestUser = User.builder().id(1L).username("cache-user").role(Role.USER).build();
+        // All cache tests run as a regular USER who owns the todos
+        when(securityUtil.isAdmin()).thenReturn(false);
+        when(securityUtil.getCurrentUser()).thenReturn(cacheTestUser);
+
         // Clear the "todos" cache before every test method.
         // Without this, a cache entry from one test pollutes the next test.
         // e.g., test 1 caches id=1 → test 2 calls getTodoById(1) → gets cached value
@@ -96,23 +109,19 @@ class TodoCacheTest {
     @Test
     @DisplayName("getTodoById: repository called once; second call served from cache")
     void getTodoById_secondCallServedFromCache() {
-        // Arrange: repository returns the todo when asked
-        when(todoRepository.findById(1L)).thenReturn(Optional.of(sampleTodo));
+        // USER role: service calls findByIdAndOwner
+        when(todoRepository.findByIdAndOwner(1L, cacheTestUser)).thenReturn(Optional.of(sampleTodo));
 
-        // Act: call the service TWICE with the same id
         Optional<TodoResponse> first  = todoService.getTodoById(1L);
         Optional<TodoResponse> second = todoService.getTodoById(1L);
 
-        // Assert: both calls returned the same result
         assertThat(first).isPresent();
         assertThat(second).isPresent();
         assertThat(first.get().getTitle()).isEqualTo("Learn Caching");
         assertThat(second.get().getTitle()).isEqualTo("Learn Caching");
 
-        // THE KEY ASSERTION: repository was only called ONCE despite two service calls.
-        // The second call was served entirely from the Caffeine cache.
-        // If @Cacheable were not working, this would fail with "wanted 1 time, but was 2".
-        verify(todoRepository, times(1)).findById(1L);
+        // THE KEY ASSERTION: repository called only ONCE — second call served from cache.
+        verify(todoRepository, times(1)).findByIdAndOwner(1L, cacheTestUser);
     }
 
     @Test
@@ -120,105 +129,89 @@ class TodoCacheTest {
     void getTodoById_differentIds_cachedIndependently() {
         Todo todo2 = Todo.builder().id(2L).title("Second todo").completed(true).build();
 
-        when(todoRepository.findById(1L)).thenReturn(Optional.of(sampleTodo));
-        when(todoRepository.findById(2L)).thenReturn(Optional.of(todo2));
+        when(todoRepository.findByIdAndOwner(1L, cacheTestUser)).thenReturn(Optional.of(sampleTodo));
+        when(todoRepository.findByIdAndOwner(2L, cacheTestUser)).thenReturn(Optional.of(todo2));
 
-        // Two calls for id=1, two calls for id=2
         todoService.getTodoById(1L);
         todoService.getTodoById(1L); // cache hit for key 1
         todoService.getTodoById(2L);
         todoService.getTodoById(2L); // cache hit for key 2
 
-        // Each id was loaded from DB exactly once — the other calls hit their own cache entry
-        verify(todoRepository, times(1)).findById(1L);
-        verify(todoRepository, times(1)).findById(2L);
+        verify(todoRepository, times(1)).findByIdAndOwner(1L, cacheTestUser);
+        verify(todoRepository, times(1)).findByIdAndOwner(2L, cacheTestUser);
     }
 
     @Test
     @DisplayName("getTodoById: caches Optional.empty() for non-existent ids")
     void getTodoById_notFound_cachesSentinelValue() {
-        // Repository returns empty for id=99
-        when(todoRepository.findById(99L)).thenReturn(Optional.empty());
+        when(todoRepository.findByIdAndOwner(99L, cacheTestUser)).thenReturn(Optional.empty());
 
-        // Call twice
         Optional<TodoResponse> first  = todoService.getTodoById(99L);
         Optional<TodoResponse> second = todoService.getTodoById(99L);
 
-        // Both return empty
         assertThat(first).isEmpty();
         assertThat(second).isEmpty();
-
-        // DB was only queried once — even "not found" results are cached.
-        // This prevents a "cache miss storm" for non-existent ids.
-        verify(todoRepository, times(1)).findById(99L);
+        verify(todoRepository, times(1)).findByIdAndOwner(99L, cacheTestUser);
     }
 
     // -----------------------------------------------------------------------
-    // @CacheEvict on updateTodo — stale data prevention proof
+    // @CacheEvict on updateTodo
     // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("updateTodo: evicts cache entry so next getTodoById reloads from DB")
     void updateTodo_evictsCacheEntry_nextGetReloadsFromDb() {
-        // Arrange: first load caches the OLD todo
-        when(todoRepository.findById(1L)).thenReturn(Optional.of(sampleTodo));
+        // Step 1: first load — caches the OLD todo
+        when(todoRepository.findByIdAndOwner(1L, cacheTestUser)).thenReturn(Optional.of(sampleTodo));
         todoService.getTodoById(1L); // loads and caches
 
-        // Now simulate an update — repository returns the updated todo on the next findById
-        Todo updatedTodo = Todo.builder().id(1L).title("Updated title").completed(true).build();
-        when(todoRepository.findById(1L)).thenReturn(Optional.of(updatedTodo));
+        // Step 2: simulate an update
+        Todo updatedTodo = Todo.builder().id(1L).title("Updated title").completed(true)
+                .owner(cacheTestUser).build();
+        when(todoRepository.findByIdAndOwner(1L, cacheTestUser)).thenReturn(Optional.of(updatedTodo));
         when(todoRepository.save(sampleTodo)).thenReturn(updatedTodo);
 
         UpdateTodoRequest updateRequest = UpdateTodoRequest.builder()
                 .title("Updated title").completed(true).build();
 
-        // Act: update evicts the cache entry for id=1
+        // Step 3: update evicts the cache
         todoService.updateTodo(1L, updateRequest);
 
-        // Act: get the todo again — cache was evicted so this is a MISS, DB is called
+        // Step 4: getTodoById — cache was evicted, loads fresh from DB
         Optional<TodoResponse> afterUpdate = todoService.getTodoById(1L);
 
-        // Assert: we got fresh data, not the stale cached value
         assertThat(afterUpdate).isPresent();
         assertThat(afterUpdate.get().getTitle()).isEqualTo("Updated title");
 
-        // findById is called 3 times total:
-        //   1. getTodoById(1L)     → cache MISS, loads from DB, caches result
-        //   2. updateTodo(1L, ...) → internally calls findById to load the entity to mutate
-        //   3. getTodoById(1L)     → cache MISS (evicted), reloads from DB
-        //
-        // If @CacheEvict were NOT working, call #3 would return the stale cached value
-        // and findById would only be called 2 times (not 3). The title would still be
-        // "Learn Caching" instead of "Updated title", proving the eviction works.
-        verify(todoRepository, times(3)).findById(1L);
+        // findByIdAndOwner called 3 times:
+        //   1. getTodoById → cache MISS, loads, caches
+        //   2. updateTodo  → loads entity to mutate
+        //   3. getTodoById → cache MISS (evicted), reloads
+        verify(todoRepository, times(3)).findByIdAndOwner(1L, cacheTestUser);
     }
 
     // -----------------------------------------------------------------------
-    // @CacheEvict on deleteTodo — stale entry removal proof
+    // @CacheEvict on deleteTodo
     // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("deleteTodo: evicts cache entry so deleted todo is not served from cache")
     void deleteTodo_evictsCacheEntry() {
-        // Arrange: cache the todo first
-        when(todoRepository.findById(1L)).thenReturn(Optional.of(sampleTodo));
-        when(todoRepository.existsById(1L)).thenReturn(true);
+        // Step 1: cache the todo (USER role uses findByIdAndOwner)
+        when(todoRepository.findByIdAndOwner(1L, cacheTestUser)).thenReturn(Optional.of(sampleTodo));
         todoService.getTodoById(1L); // caches id=1
 
-        // Act: delete the todo — should evict the cache entry
-        todoService.deleteTodo(1L);
+        // Step 2: delete — USER role: findByIdAndOwner then delete(todo)
+        when(todoRepository.findByIdAndOwner(1L, cacheTestUser)).thenReturn(Optional.of(sampleTodo));
+        todoService.deleteTodo(1L); // evicts id=1 from cache
 
-        // After deletion, repository returns empty (the todo is gone)
-        when(todoRepository.findById(1L)).thenReturn(Optional.empty());
+        // Step 3: after deletion repository returns empty
+        when(todoRepository.findByIdAndOwner(1L, cacheTestUser)).thenReturn(Optional.empty());
 
-        // Get the (now-deleted) todo — should be a cache MISS and return empty
         Optional<TodoResponse> result = todoService.getTodoById(1L);
 
         assertThat(result).isEmpty();
-
-        // If @CacheEvict were not working, result would be the stale cached todo,
-        // and findById would be called 0 times (served entirely from stale cache).
-        // Instead: 1st call cached it, 2nd call is a miss after eviction.
-        verify(todoRepository, times(2)).findById(1L);
+        // findByIdAndOwner called 3 times: cache miss, delete lookup, post-eviction miss
+        verify(todoRepository, times(3)).findByIdAndOwner(1L, cacheTestUser);
     }
 }

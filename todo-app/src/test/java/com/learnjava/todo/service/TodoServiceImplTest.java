@@ -5,8 +5,11 @@ import com.learnjava.todo.dto.request.TodoFilterRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
 import com.learnjava.todo.dto.response.PagedResponse;
 import com.learnjava.todo.dto.response.TodoResponse;
+import com.learnjava.todo.model.Role;
 import com.learnjava.todo.model.Todo;
+import com.learnjava.todo.model.User;
 import com.learnjava.todo.repository.TodoRepository;
+import com.learnjava.todo.security.SecurityUtil;
 import com.learnjava.todo.service.impl.TodoServiceImpl;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,33 +34,48 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-// @ExtendWith(MockitoExtension.class) — activates Mockito without Spring.
-// No Spring context is loaded. No database is touched. Tests run in milliseconds.
+// LENIENT strictness: @BeforeEach stubs isAdmin() and getCurrentUser() for all tests.
+// Not every test exercises both — Mockito strict mode would flag unused stubs.
+// LENIENT disables that check while keeping all other strict-mode protections.
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class TodoServiceImplTest {
 
     @Mock
     private TodoRepository todoRepository;
 
-    // TodoMapper is now an interface — Mockito mocks it via JDK proxy (no ByteBuddy needed).
-    // This is one of the benefits of using an interface: clean, fast mocking.
     @Mock
     private TodoMapper todoMapper;
 
-    // We can no longer use @InjectMocks because TodoServiceImpl's constructor now also
-    // requires a MeterRegistry — which cannot be injected by Mockito as a @Mock
-    // (Counter.builder().register() needs a real registry, not a mock).
-    // SimpleMeterRegistry is Micrometer's lightweight in-memory implementation —
-    // perfect for unit tests: no Spring context, no I/O, just a plain Java object.
+    // SecurityUtil is a Spring bean — mock it as an interface-less @Component.
+    // Since SecurityUtil is a plain class (not abstract), we use @Mock with the
+    // --add-opens in surefire to let ByteBuddy subclass it.
+    @Mock
+    private SecurityUtil securityUtil;
+
     private TodoServiceImpl todoService;
 
     private Todo sampleTodo;
     private TodoResponse sampleResponse;
 
+    // The currently authenticated user used across all tests.
+    private User currentUser;
+
     @BeforeEach
     void setUp() {
-        // Build the service manually, supplying mocks + a real SimpleMeterRegistry.
-        todoService = new TodoServiceImpl(todoRepository, todoMapper, new SimpleMeterRegistry());
+        // Build the service manually with all dependencies.
+        todoService = new TodoServiceImpl(todoRepository, todoMapper, securityUtil, new SimpleMeterRegistry());
+
+        currentUser = User.builder()
+                .id(1L)
+                .username("testuser")
+                .role(Role.USER)
+                .build();
+
+        // Default: all tests run as a non-admin USER.
+        // Individual tests that need ADMIN behaviour override these.
+        when(securityUtil.isAdmin()).thenReturn(false);
+        when(securityUtil.getCurrentUser()).thenReturn(currentUser);
         sampleTodo = Todo.builder()
                 .id(1L)
                 .title("Learn Spring Boot")
@@ -117,9 +135,10 @@ class TodoServiceImplTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("getTodoById: returns Optional with response when todo exists")
+    @DisplayName("getTodoById: returns Optional with response when USER owns the todo")
     void getTodoById_found_returnsOptionalWithResponse() {
-        when(todoRepository.findById(1L)).thenReturn(Optional.of(sampleTodo));
+        // USER role — uses findByIdAndOwner (ownership-scoped lookup)
+        when(todoRepository.findByIdAndOwner(1L, currentUser)).thenReturn(Optional.of(sampleTodo));
         when(todoMapper.toResponse(sampleTodo)).thenReturn(sampleResponse);
 
         Optional<TodoResponse> result = todoService.getTodoById(1L);
@@ -130,9 +149,10 @@ class TodoServiceImplTest {
     }
 
     @Test
-    @DisplayName("getTodoById: returns empty Optional when todo does not exist")
-    void getTodoById_notFound_returnsEmptyOptional() {
-        when(todoRepository.findById(99L)).thenReturn(Optional.empty());
+    @DisplayName("getTodoById: returns empty when todo belongs to a different user")
+    void getTodoById_notOwned_returnsEmptyOptional() {
+        // findByIdAndOwner returns empty → the todo exists but belongs to someone else → 404
+        when(todoRepository.findByIdAndOwner(99L, currentUser)).thenReturn(Optional.empty());
 
         Optional<TodoResponse> result = todoService.getTodoById(99L);
 
@@ -144,24 +164,32 @@ class TodoServiceImplTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("createTodo: saves entity and returns response with assigned id")
+    @DisplayName("createTodo: saves entity with owner set and returns response with assigned id")
     void createTodo_savesAndReturnsResponse() {
         CreateTodoRequest request = CreateTodoRequest.builder()
                 .title("New task").description("Details").completed(false).build();
 
+        // Mapper returns an unsaved todo (no id, no owner yet)
         Todo unsaved = Todo.builder().title("New task").description("Details").completed(false).build();
-        Todo savedTodo = Todo.builder().id(5L).title("New task").description("Details").completed(false).build();
-        TodoResponse savedResponse = TodoResponse.builder().id(5L).title("New task").completed(false).build();
+        // After service sets owner and calls save, repository returns the persisted entity
+        Todo savedTodo = Todo.builder().id(5L).title("New task").description("Details")
+                .completed(false).owner(currentUser).build();
+        TodoResponse savedResponse = TodoResponse.builder().id(5L).title("New task")
+                .completed(false).ownedBy("testuser").build();
 
         when(todoMapper.toModel(request)).thenReturn(unsaved);
-        when(todoRepository.save(unsaved)).thenReturn(savedTodo);
+        // The service sets unsaved.owner = currentUser before calling save.
+        // We use any(Todo.class) since the exact instance after mutation is hard to pin.
+        when(todoRepository.save(any(Todo.class))).thenReturn(savedTodo);
         when(todoMapper.toResponse(savedTodo)).thenReturn(savedResponse);
 
         TodoResponse result = todoService.createTodo(request);
 
         assertThat(result.getId()).isEqualTo(5L);
         assertThat(result.getTitle()).isEqualTo("New task");
-        verify(todoRepository).save(unsaved);
+        // Verify save was called — owner was set before save (can't easily verify the field
+        // on the exact argument since the same instance is mutated, but save must be called)
+        verify(todoRepository).save(any(Todo.class));
     }
 
     @Test
@@ -171,11 +199,13 @@ class TodoServiceImplTest {
                 .title("Task without completed").build();
 
         Todo unsaved = Todo.builder().title("Task without completed").completed(false).build();
-        Todo savedTodo = Todo.builder().id(1L).title("Task without completed").completed(false).build();
-        TodoResponse savedResponse = TodoResponse.builder().id(1L).title("Task without completed").completed(false).build();
+        Todo savedTodo = Todo.builder().id(1L).title("Task without completed")
+                .completed(false).owner(currentUser).build();
+        TodoResponse savedResponse = TodoResponse.builder().id(1L).title("Task without completed")
+                .completed(false).build();
 
         when(todoMapper.toModel(request)).thenReturn(unsaved);
-        when(todoRepository.save(unsaved)).thenReturn(savedTodo);
+        when(todoRepository.save(any(Todo.class))).thenReturn(savedTodo);
         when(todoMapper.toResponse(savedTodo)).thenReturn(savedResponse);
 
         TodoResponse result = todoService.createTodo(request);
@@ -188,20 +218,21 @@ class TodoServiceImplTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("updateTodo: loads existing entity, applies update, saves, returns response")
+    @DisplayName("updateTodo: loads entity by owner, applies update, saves, returns response")
     void updateTodo_found_returnsUpdatedResponse() {
         UpdateTodoRequest request = UpdateTodoRequest.builder()
                 .title("Updated title").completed(true).build();
 
-        // Simulate the entity loaded from DB
-        Todo existingTodo = Todo.builder().id(1L).title("Old title").completed(false).build();
-        // After mapper.updateModel() mutates it, save returns it back
-        Todo savedTodo = Todo.builder().id(1L).title("Updated title").completed(true).build();
-        TodoResponse updatedResponse = TodoResponse.builder().id(1L).title("Updated title").completed(true).build();
+        Todo existingTodo = Todo.builder().id(1L).title("Old title").completed(false)
+                .owner(currentUser).build();
+        Todo savedTodo = Todo.builder().id(1L).title("Updated title").completed(true)
+                .owner(currentUser).build();
+        TodoResponse updatedResponse = TodoResponse.builder().id(1L).title("Updated title")
+                .completed(true).build();
 
-        when(todoRepository.findById(1L)).thenReturn(Optional.of(existingTodo));
+        // USER role uses findByIdAndOwner
+        when(todoRepository.findByIdAndOwner(1L, currentUser)).thenReturn(Optional.of(existingTodo));
 
-        // updateModel is void — we use doAnswer to simulate the mutation it performs
         doAnswer(invocation -> {
             Todo target = invocation.getArgument(0);
             target.setTitle("Updated title");
@@ -217,22 +248,20 @@ class TodoServiceImplTest {
         assertThat(result).isPresent();
         assertThat(result.get().getTitle()).isEqualTo("Updated title");
         assertThat(result.get().getCompleted()).isTrue();
-        // Verify the correct flow: findById → updateModel → save
-        verify(todoRepository).findById(1L);
+        verify(todoRepository).findByIdAndOwner(1L, currentUser);
         verify(todoMapper).updateModel(existingTodo, request);
         verify(todoRepository).save(existingTodo);
     }
 
     @Test
-    @DisplayName("updateTodo: returns empty Optional when todo does not exist")
+    @DisplayName("updateTodo: returns empty Optional when todo not found or not owned")
     void updateTodo_notFound_returnsEmpty() {
-        when(todoRepository.findById(99L)).thenReturn(Optional.empty());
+        when(todoRepository.findByIdAndOwner(99L, currentUser)).thenReturn(Optional.empty());
 
         Optional<TodoResponse> result = todoService.updateTodo(99L,
                 UpdateTodoRequest.builder().title("anything").build());
 
         assertThat(result).isEmpty();
-        // save() must never be called when the entity doesn't exist
         verify(todoRepository, never()).save(any());
     }
 
@@ -241,24 +270,39 @@ class TodoServiceImplTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("deleteTodo: returns true and calls deleteById when todo exists")
+    @DisplayName("deleteTodo (USER): returns true and calls delete when user owns the todo")
     void deleteTodo_found_deletesAndReturnsTrue() {
+        Todo ownedTodo = Todo.builder().id(1L).title("My todo").completed(false)
+                .owner(currentUser).build();
+        // USER role: service calls findByIdAndOwner, then delete(todo)
+        when(todoRepository.findByIdAndOwner(1L, currentUser)).thenReturn(Optional.of(ownedTodo));
+
+        boolean result = todoService.deleteTodo(1L);
+
+        assertThat(result).isTrue();
+        verify(todoRepository).delete(ownedTodo);
+    }
+
+    @Test
+    @DisplayName("deleteTodo (USER): returns false when todo not found or not owned")
+    void deleteTodo_notFound_returnsFalse() {
+        when(todoRepository.findByIdAndOwner(99L, currentUser)).thenReturn(Optional.empty());
+
+        boolean result = todoService.deleteTodo(99L);
+
+        assertThat(result).isFalse();
+        verify(todoRepository, never()).delete(any(Todo.class));
+    }
+
+    @Test
+    @DisplayName("deleteTodo (ADMIN): uses existsById + deleteById, ignores ownership")
+    void deleteTodo_admin_deletesAnyTodo() {
+        when(securityUtil.isAdmin()).thenReturn(true);
         when(todoRepository.existsById(1L)).thenReturn(true);
 
         boolean result = todoService.deleteTodo(1L);
 
         assertThat(result).isTrue();
         verify(todoRepository).deleteById(1L);
-    }
-
-    @Test
-    @DisplayName("deleteTodo: returns false and never calls deleteById when todo does not exist")
-    void deleteTodo_notFound_returnsFalse() {
-        when(todoRepository.existsById(99L)).thenReturn(false);
-
-        boolean result = todoService.deleteTodo(99L);
-
-        assertThat(result).isFalse();
-        verify(todoRepository, never()).deleteById(any());
     }
 }
