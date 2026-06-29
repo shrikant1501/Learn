@@ -56,6 +56,11 @@
             uses internal javac APIs that changed in Java 23+.
         -->
         <lombok.version>1.18.38</lombok.version>
+        <!--
+            MapStruct version pinned explicitly — not managed by Spring Boot's BOM.
+            1.5.x is the current stable series and supports Spring Boot 3 / Jakarta EE.
+        -->
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
     </properties>
 
     <dependencies>
@@ -172,6 +177,19 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!--
+            MAPSTRUCT
+            The mapstruct jar provides the annotations we use in our mapper interface
+            (@Mapper, @Mapping, @MappingTarget etc.) and the API types MapStruct needs
+            at compile time. It has NO runtime reflection — the generated code is
+            plain Java, so there is zero overhead over hand-written mappers.
+        -->
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+            <version>${mapstruct.version}</version>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -211,16 +229,37 @@
                         <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED</arg>
                     </compilerArgs>
                     <annotationProcessorPaths>
+                        <!--
+                            ORDER IS CRITICAL:
+                            1. Lombok must run FIRST — it generates the getters/setters/builders
+                               that MapStruct needs to read when generating mapping code.
+                            2. lombok-mapstruct-binding ensures Lombok and MapStruct
+                               annotation processors are coordinated correctly.
+                            3. MapStruct runs LAST — it reads Lombok-generated code
+                               to produce the final mapper implementation.
+                            If Lombok and MapStruct run in the wrong order, MapStruct
+                            will see classes WITHOUT getters and generate broken mappers.
+                        -->
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
-                            <!--
-                                We must provide an explicit version here because
-                                annotationProcessorPaths are resolved independently
-                                from the regular dependency management section.
-                                Spring Boot's BOM version management does not apply here.
-                            -->
                             <version>${lombok.version}</version>
+                        </path>
+                        <path>
+                            <!--
+                                lombok-mapstruct-binding: a tiny bridge that tells the
+                                Java compiler to run Lombok's processor before MapStruct's.
+                                Without this, the order is non-deterministic and MapStruct
+                                may see Lombok-annotated classes before Lombok has processed them.
+                            -->
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok-mapstruct-binding</artifactId>
+                            <version>0.2.0</version>
+                        </path>
+                        <path>
+                            <groupId>org.mapstruct</groupId>
+                            <artifactId>mapstruct-processor</artifactId>
+                            <version>${mapstruct.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

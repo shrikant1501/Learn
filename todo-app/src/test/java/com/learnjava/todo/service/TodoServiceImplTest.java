@@ -26,54 +26,63 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 // @ExtendWith(MockitoExtension.class) — activates Mockito without Spring.
-// This tells JUnit 5: "before each test, process the @Mock and @InjectMocks annotations".
 // No Spring context is loaded. No database is touched. Tests run in milliseconds.
 @ExtendWith(MockitoExtension.class)
 class TodoServiceImplTest {
 
-    // @Mock — creates a fake TodoRepository. Every method returns sensible defaults
-    // (empty list, empty Optional, etc.) unless you configure them with when(...).
     @Mock
     private TodoRepository todoRepository;
 
-    // @InjectMocks — creates a real TodoServiceImpl and injects the @Mock above into it
-    // via constructor injection (Mockito sees the constructor and passes the mock).
-    // This is a REAL service instance — not a mock — but its dependency is mocked.
+    // TodoMapper is now an interface — Mockito mocks it via JDK proxy (no ByteBuddy needed).
+    // This is one of the benefits of using an interface: clean, fast mocking.
+    @Mock
+    private TodoMapper todoMapper;
+
+    // @InjectMocks — Mockito creates a real TodoServiceImpl and injects both mocks above.
+    // TodoServiceImpl now has two constructor args (repository + mapper), Mockito handles both.
     @InjectMocks
     private TodoServiceImpl todoService;
 
-    // Reusable test fixtures — built once per test via @BeforeEach
     private Todo sampleTodo;
+    private TodoResponse sampleResponse;
 
     @BeforeEach
     void setUp() {
         sampleTodo = Todo.builder()
                 .id(1L)
                 .title("Learn Spring Boot")
-                .description("Phase 7")
+                .description("Phase 11")
                 .completed(false)
                 .build();
 
+        sampleResponse = TodoResponse.builder()
+                .id(1L)
+                .title("Learn Spring Boot")
+                .description("Phase 11")
+                .completed(false)
+                .build();
     }
 
     // -----------------------------------------------------------------------
-    // getAllTodos
+    // getTodos
     // -----------------------------------------------------------------------
 
     @Test
     @DisplayName("getTodos: returns paged response with content when todos exist")
     void getTodos_returnsMappedPagedResponse() {
         Pageable pageable = PageRequest.of(0, 10);
-        // PageImpl simulates a database page result with content + total count
         Page<Todo> mockPage = new PageImpl<>(List.of(sampleTodo), pageable, 1);
 
         when(todoRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(mockPage);
+        // The mapper's toResponse is called for each Todo in the page content
+        when(todoMapper.toResponse(sampleTodo)).thenReturn(sampleResponse);
 
         PagedResponse<TodoResponse> result = todoService.getTodos(new TodoFilterRequest(), pageable);
 
@@ -107,10 +116,10 @@ class TodoServiceImplTest {
     @DisplayName("getTodoById: returns Optional with response when todo exists")
     void getTodoById_found_returnsOptionalWithResponse() {
         when(todoRepository.findById(1L)).thenReturn(Optional.of(sampleTodo));
+        when(todoMapper.toResponse(sampleTodo)).thenReturn(sampleResponse);
 
         Optional<TodoResponse> result = todoService.getTodoById(1L);
 
-        // isPresent() verifies the Optional is not empty
         assertThat(result).isPresent();
         assertThat(result.get().getId()).isEqualTo(1L);
         assertThat(result.get().getTitle()).isEqualTo("Learn Spring Boot");
@@ -134,33 +143,36 @@ class TodoServiceImplTest {
     @DisplayName("createTodo: saves entity and returns response with assigned id")
     void createTodo_savesAndReturnsResponse() {
         CreateTodoRequest request = CreateTodoRequest.builder()
-                .title("New task")
-                .description("Details")
-                .completed(false)
-                .build();
+                .title("New task").description("Details").completed(false).build();
 
-        // The repository save() returns the saved entity with an id assigned (simulating DB)
+        Todo unsaved = Todo.builder().title("New task").description("Details").completed(false).build();
         Todo savedTodo = Todo.builder().id(5L).title("New task").description("Details").completed(false).build();
-        when(todoRepository.save(any(Todo.class))).thenReturn(savedTodo);
+        TodoResponse savedResponse = TodoResponse.builder().id(5L).title("New task").completed(false).build();
+
+        when(todoMapper.toModel(request)).thenReturn(unsaved);
+        when(todoRepository.save(unsaved)).thenReturn(savedTodo);
+        when(todoMapper.toResponse(savedTodo)).thenReturn(savedResponse);
 
         TodoResponse result = todoService.createTodo(request);
 
         assertThat(result.getId()).isEqualTo(5L);
         assertThat(result.getTitle()).isEqualTo("New task");
-
-        // Verify that save() was called exactly once with any Todo argument
-        verify(todoRepository).save(any(Todo.class));
+        verify(todoRepository).save(unsaved);
     }
 
     @Test
     @DisplayName("createTodo: defaults completed to false when not provided")
     void createTodo_nullCompleted_defaultsFalse() {
         CreateTodoRequest request = CreateTodoRequest.builder()
-                .title("Task without completed")
-                .build(); // completed is null
+                .title("Task without completed").build();
 
+        Todo unsaved = Todo.builder().title("Task without completed").completed(false).build();
         Todo savedTodo = Todo.builder().id(1L).title("Task without completed").completed(false).build();
-        when(todoRepository.save(any(Todo.class))).thenReturn(savedTodo);
+        TodoResponse savedResponse = TodoResponse.builder().id(1L).title("Task without completed").completed(false).build();
+
+        when(todoMapper.toModel(request)).thenReturn(unsaved);
+        when(todoRepository.save(unsaved)).thenReturn(savedTodo);
+        when(todoMapper.toResponse(savedTodo)).thenReturn(savedResponse);
 
         TodoResponse result = todoService.createTodo(request);
 
@@ -168,33 +180,49 @@ class TodoServiceImplTest {
     }
 
     // -----------------------------------------------------------------------
-    // updateTodo
+    // updateTodo — @MappingTarget pattern
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("updateTodo: returns updated response when todo exists")
+    @DisplayName("updateTodo: loads existing entity, applies update, saves, returns response")
     void updateTodo_found_returnsUpdatedResponse() {
         UpdateTodoRequest request = UpdateTodoRequest.builder()
-                .title("Updated title")
-                .completed(true)
-                .build();
+                .title("Updated title").completed(true).build();
 
-        Todo updatedTodo = Todo.builder().id(1L).title("Updated title").completed(true).build();
+        // Simulate the entity loaded from DB
+        Todo existingTodo = Todo.builder().id(1L).title("Old title").completed(false).build();
+        // After mapper.updateModel() mutates it, save returns it back
+        Todo savedTodo = Todo.builder().id(1L).title("Updated title").completed(true).build();
+        TodoResponse updatedResponse = TodoResponse.builder().id(1L).title("Updated title").completed(true).build();
 
-        when(todoRepository.existsById(1L)).thenReturn(true);
-        when(todoRepository.save(any(Todo.class))).thenReturn(updatedTodo);
+        when(todoRepository.findById(1L)).thenReturn(Optional.of(existingTodo));
+
+        // updateModel is void — we use doAnswer to simulate the mutation it performs
+        doAnswer(invocation -> {
+            Todo target = invocation.getArgument(0);
+            target.setTitle("Updated title");
+            target.setCompleted(true);
+            return null;
+        }).when(todoMapper).updateModel(existingTodo, request);
+
+        when(todoRepository.save(existingTodo)).thenReturn(savedTodo);
+        when(todoMapper.toResponse(savedTodo)).thenReturn(updatedResponse);
 
         Optional<TodoResponse> result = todoService.updateTodo(1L, request);
 
         assertThat(result).isPresent();
         assertThat(result.get().getTitle()).isEqualTo("Updated title");
         assertThat(result.get().getCompleted()).isTrue();
+        // Verify the correct flow: findById → updateModel → save
+        verify(todoRepository).findById(1L);
+        verify(todoMapper).updateModel(existingTodo, request);
+        verify(todoRepository).save(existingTodo);
     }
 
     @Test
     @DisplayName("updateTodo: returns empty Optional when todo does not exist")
     void updateTodo_notFound_returnsEmpty() {
-        when(todoRepository.existsById(99L)).thenReturn(false);
+        when(todoRepository.findById(99L)).thenReturn(Optional.empty());
 
         Optional<TodoResponse> result = todoService.updateTodo(99L,
                 UpdateTodoRequest.builder().title("anything").build());
@@ -227,7 +255,6 @@ class TodoServiceImplTest {
         boolean result = todoService.deleteTodo(99L);
 
         assertThat(result).isFalse();
-        // Critical: deleteById must never be called for a non-existent id
         verify(todoRepository, never()).deleteById(any());
     }
 }

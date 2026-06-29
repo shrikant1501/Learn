@@ -2,156 +2,77 @@ package com.learnjava.todo.service;
 
 import com.learnjava.todo.dto.request.CreateTodoRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
-import com.learnjava.todo.dto.response.PagedResponse;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.model.Todo;
-import org.springframework.data.domain.Page;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+import org.mapstruct.NullValuePropertyMappingStrategy;
 
-import java.util.List;
-
-/**
- * Converts between the {@link Todo} domain model and its DTO representations.
- *
- * <p>
- * <strong>Why is this in the {@code service} package?</strong><br>
- * The mapper sits at the service layer boundary. It is used:
- * <ul>
- *   <li>In the service: to convert request DTOs into domain objects (input)</li>
- *   <li>In the service: to convert domain objects into response DTOs (output)</li>
- * </ul>
- * Controllers never touch the {@code Todo} model — they only see DTOs.
- * Services never touch DTOs directly in business logic — they work with the model.
- * The mapper is the bridge between these two worlds.
- *
- * <p>
- * <strong>Why a class with static methods and not a Spring {@code @Component}?</strong><br>
- * Mapping is pure data transformation — no external dependencies, no I/O,
- * no state. There is no benefit to making Spring manage it. A class with
- * static utility methods is simpler and more honest about what it is.
- * It also makes tests easier: no Spring context needed to call a static method.
- *
- * <p>
- * <strong>Why not put this logic directly in the service?</strong><br>
- * Single Responsibility Principle. The service has one reason to change:
- * business logic changes. The mapper has one reason to change: the DTO shape
- * or model structure changes. Mixing them gives the service two reasons to
- * change — a violation of SRP.
- *
- * <p>
- * <strong>In a future phase</strong>, we will replace this hand-written mapper
- * with MapStruct — an annotation processor that generates this code automatically.
- * By writing it by hand first, you fully understand what MapStruct is saving you from.
- *
- * <p>
- * The constructor is private because this class should never be instantiated —
- * all methods are static utilities.
- */
-public final class TodoMapper {
-
-    // Prevent instantiation — this is a pure utility class
-    private TodoMapper() {}
+// @Mapper — marks this interface as a MapStruct mapper.
+// MapStruct's annotation processor reads this interface at compile time
+// and generates a class called TodoMapperImpl in target/generated-sources.
+//
+// componentModel = "spring":
+//   Tells MapStruct to annotate the generated class with @Component.
+//   Spring then picks it up and manages it as a bean — injectable via constructor injection.
+//   Without this, Spring doesn't know about the generated class.
+//
+// nullValuePropertyMappingStrategy = IGNORE:
+//   When a source field is null, don't overwrite the target field.
+//   Critical for the updateModel method — if a client sends null for a field,
+//   we keep the existing DB value instead of overwriting it with null.
+@Mapper(
+        componentModel = "spring",
+        nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE
+)
+public interface TodoMapper {
 
     // =========================================================================
-    // Request DTOs → Domain Model
+    // CreateTodoRequest → Todo (new entity, no ID yet)
     // =========================================================================
 
-    /**
-     * Converts a {@link CreateTodoRequest} into a new {@link Todo} domain object.
-     *
-     * <p>
-     * Note: the {@code id} is NOT set here. The ID is assigned by the service
-     * (currently {@code AtomicLong}, later the database). This method produces
-     * an "unsaved" Todo — a model object without an identity yet.
-     *
-     * @param request the incoming create request
-     * @return a new Todo with no ID assigned
-     */
-    public static Todo toModel(CreateTodoRequest request) {
-        return Todo.builder()
-                .title(request.getTitle())
-                .description(request.getDescription())
-                .completed(request.getCompleted() != null ? request.getCompleted() : false)
-                .build();
-    }
-
-    /**
-     * Converts an {@link UpdateTodoRequest} into a {@link Todo} domain object.
-     *
-     * <p>
-     * The {@code id} parameter is explicitly passed in because the ID lives in the
-     * URL path (authoritative), not in the request body. The mapper receives it as
-     * a parameter and sets it on the model — making the intent crystal clear.
-     *
-     * @param id      the authoritative ID from the URL path
-     * @param request the incoming update request
-     * @return a Todo with all fields set, ready to replace the stored version
-     */
-    public static Todo toModel(Long id, UpdateTodoRequest request) {
-        return Todo.builder()
-                .id(id)
-                .title(request.getTitle())
-                .description(request.getDescription())
-                .completed(request.getCompleted())
-                .build();
-    }
+    // @Mapping(target = "id", ignore = true):
+    //   CreateTodoRequest has no id field. Without this, MapStruct would warn
+    //   about an unmapped target property. We explicitly say: "id is intentionally
+    //   left alone — the database assigns it on INSERT."
+    //
+    // @Mapping(target = "completed", defaultValue = "false"):
+    //   If the client sends null for completed, default to false.
+    //   MapStruct sets this default only when the source value is null.
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "completed", defaultValue = "false")
+    Todo toModel(CreateTodoRequest request);
 
     // =========================================================================
-    // Domain Model → Response DTO
+    // UpdateTodoRequest → existing Todo (@MappingTarget — update in place)
     // =========================================================================
 
-    /**
-     * Converts a {@link Todo} domain object into a {@link TodoResponse} DTO.
-     *
-     * <p>
-     * This is the outbound conversion — called before sending data to clients.
-     * Only the fields we explicitly include here will appear in the JSON response.
-     * Internal fields (future: version, createdAt, etc.) are simply not mapped.
-     *
-     * @param todo the domain object to convert
-     * @return a response DTO safe to expose to clients
-     */
-    public static TodoResponse toResponse(Todo todo) {
-        return TodoResponse.builder()
-                .id(todo.getId())
-                .title(todo.getTitle())
-                .description(todo.getDescription())
-                .completed(todo.getCompleted())
-                .build();
-    }
+    // @MappingTarget Todo todo — this is the KEY pattern for updates.
+    //
+    // Instead of creating a NEW Todo object, MapStruct updates the EXISTING
+    // Todo entity that was loaded from the database. This means:
+    //   1. Fields from UpdateTodoRequest overwrite fields on the existing entity
+    //   2. Fields NOT present in UpdateTodoRequest are left untouched (e.g., id)
+    //   3. When we add auditing (Phase 12), createdAt is preserved automatically
+    //
+    // The method returns void because the target is mutated in place.
+    // The caller (TodoServiceImpl) loads the entity from DB, passes it here,
+    // then saves it — Hibernate's dirty-checking does the rest.
+    //
+    // @Mapping(target = "id", ignore = true):
+    //   The id lives in the URL path, not in the request body. We must NOT
+    //   let UpdateTodoRequest accidentally overwrite the entity's id.
+    @Mapping(target = "id", ignore = true)
+    void updateModel(@MappingTarget Todo todo, UpdateTodoRequest request);
 
-    /**
-     * Converts a list of {@link Todo} domain objects into a list of {@link TodoResponse} DTOs.
-     *
-     * <p>
-     * Uses the Java Stream API for the conversion:
-     * {@code .stream()} — creates a stream from the list
-     * {@code .map(TodoMapper::toResponse)} — applies toResponse() to each element
-     * {@code .toList()} — collects results into an immutable list (Java 16+)
-     *
-     * <p>
-     * {@code TodoMapper::toResponse} is a method reference — shorthand for
-     * {@code todo -> TodoMapper.toResponse(todo)}.
-     *
-     * @param todos the list of domain objects
-     * @return a list of response DTOs
-     */
-    public static List<TodoResponse> toResponseList(List<Todo> todos) {
-        return todos.stream()
-                .map(TodoMapper::toResponse)
-                .toList();
-    }
+    // =========================================================================
+    // Todo → TodoResponse (outbound)
+    // =========================================================================
 
-    // Converts a Spring Data Page<Todo> into our PagedResponse<TodoResponse> wrapper.
-    // Page<Todo> contains the content list + all pagination metadata.
-    // We map the content to DTOs and copy the metadata — clean separation.
-    public static PagedResponse<TodoResponse> toPagedResponse(Page<Todo> page) {
-        return PagedResponse.<TodoResponse>builder()
-                .content(toResponseList(page.getContent()))
-                .page(page.getNumber())
-                .size(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
-    }
+    // All fields (id, title, description, completed) match by name between
+    // Todo and TodoResponse, so no @Mapping annotations are needed here.
+    // MapStruct generates: return TodoResponse.builder()
+    //                              .id(todo.getId()) ... .build();
+    TodoResponse toResponse(Todo todo);
 }

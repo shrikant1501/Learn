@@ -4,19 +4,37 @@ import com.learnjava.todo.dto.request.CreateTodoRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
 import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.model.Todo;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
-// No Spring annotations here — TodoMapper uses only static methods.
-// We instantiate nothing, start nothing. These tests run in milliseconds.
+// MapStruct generates a class called TodoMapperImpl.
+// We test the REAL generated implementation — no Spring context, no mocks.
+// MapStruct's generated code is plain Java, so we just instantiate it with new.
+//
+// Why test the generated code?
+//   1. Verifies our @Mapping annotations are correct (defaultValue, ignore, etc.)
+//   2. Catches mistakes if we add a new field and forget to map it
+//   3. Fast — no Spring context startup, runs in milliseconds
 class TodoMapperTest {
 
+    // Mappers generated with componentModel = "spring" also have a default no-arg
+    // constructor so they can be instantiated directly in tests without Spring.
+    // Mappers.getMapper() is another option (MapStruct's factory), but new is simpler.
+    private TodoMapper todoMapper;
+
+    @BeforeEach
+    void setUp() {
+        // TodoMapperImpl is the class MapStruct generates from our TodoMapper interface.
+        // It lives in target/generated-sources/annotations/ after compilation.
+        // You can open it there to see exactly what MapStruct wrote.
+        todoMapper = new TodoMapperImpl();
+    }
+
     // -----------------------------------------------------------------------
-    // toModel(CreateTodoRequest)
+    // toModel(CreateTodoRequest) — CREATE mapping
     // -----------------------------------------------------------------------
 
     @Test
@@ -28,9 +46,9 @@ class TodoMapperTest {
                 .completed(false)
                 .build();
 
-        Todo result = TodoMapper.toModel(request);
+        Todo result = todoMapper.toModel(request);
 
-        // id must be null — the DB assigns it, not the mapper
+        // id must be null — @Mapping(target = "id", ignore = true) on the interface
         assertThat(result.getId()).isNull();
         assertThat(result.getTitle()).isEqualTo("Buy milk");
         assertThat(result.getDescription()).isEqualTo("Full fat");
@@ -40,40 +58,75 @@ class TodoMapperTest {
     @Test
     @DisplayName("toModel: defaults completed to false when null in request")
     void toModel_create_defaultsCompletedToFalse() {
-        // completed not set → null in the request
+        // completed not set — @Mapping(target = "completed", defaultValue = "false") kicks in
         CreateTodoRequest request = CreateTodoRequest.builder()
                 .title("Some task")
                 .build();
 
-        Todo result = TodoMapper.toModel(request);
+        Todo result = todoMapper.toModel(request);
 
         assertThat(result.getCompleted()).isFalse();
     }
 
     // -----------------------------------------------------------------------
-    // toModel(Long id, UpdateTodoRequest)
+    // updateModel(@MappingTarget Todo, UpdateTodoRequest) — UPDATE IN PLACE
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("toModel: stamps URL-path id onto the Todo for updates")
-    void toModel_update_stampsIdFromPath() {
+    @DisplayName("updateModel: overwrites Todo fields with values from UpdateTodoRequest")
+    void updateModel_overwritesExistingFields() {
+        // Simulate an entity already loaded from the database
+        Todo existingTodo = Todo.builder()
+                .id(5L)
+                .title("Old title")
+                .description("Old desc")
+                .completed(false)
+                .build();
+
         UpdateTodoRequest request = UpdateTodoRequest.builder()
-                .title("Updated title")
-                .description("Updated desc")
+                .title("New title")
+                .description("New desc")
                 .completed(true)
                 .build();
 
-        Todo result = TodoMapper.toModel(5L, request);
+        todoMapper.updateModel(existingTodo, request);
 
-        // id must come from the method parameter, not from the request body
-        assertThat(result.getId()).isEqualTo(5L);
-        assertThat(result.getTitle()).isEqualTo("Updated title");
-        assertThat(result.getDescription()).isEqualTo("Updated desc");
-        assertThat(result.getCompleted()).isTrue();
+        // Fields from the request should be applied
+        assertThat(existingTodo.getTitle()).isEqualTo("New title");
+        assertThat(existingTodo.getDescription()).isEqualTo("New desc");
+        assertThat(existingTodo.getCompleted()).isTrue();
+        // id must be preserved — @Mapping(target = "id", ignore = true)
+        assertThat(existingTodo.getId()).isEqualTo(5L);
+    }
+
+    @Test
+    @DisplayName("updateModel: preserves existing field when request field is null (IGNORE strategy)")
+    void updateModel_nullField_preservesExistingValue() {
+        // Simulate an entity already in DB with a description
+        Todo existingTodo = Todo.builder()
+                .id(3L)
+                .title("Keep me")
+                .description("Existing description")
+                .completed(false)
+                .build();
+
+        // Request only updates title — description is null
+        UpdateTodoRequest request = UpdateTodoRequest.builder()
+                .title("Updated title")
+                .completed(true)
+                .build(); // description intentionally left null
+
+        todoMapper.updateModel(existingTodo, request);
+
+        assertThat(existingTodo.getTitle()).isEqualTo("Updated title");
+        // nullValuePropertyMappingStrategy = IGNORE means null description
+        // in the request does NOT overwrite the existing description
+        assertThat(existingTodo.getDescription()).isEqualTo("Existing description");
+        assertThat(existingTodo.getCompleted()).isTrue();
     }
 
     // -----------------------------------------------------------------------
-    // toResponse(Todo)
+    // toResponse(Todo) — OUTBOUND mapping
     // -----------------------------------------------------------------------
 
     @Test
@@ -86,7 +139,7 @@ class TodoMapperTest {
                 .completed(true)
                 .build();
 
-        TodoResponse result = TodoMapper.toResponse(todo);
+        TodoResponse result = todoMapper.toResponse(todo);
 
         assertThat(result.getId()).isEqualTo(1L);
         assertThat(result.getTitle()).isEqualTo("Learn JPA");
@@ -94,32 +147,19 @@ class TodoMapperTest {
         assertThat(result.getCompleted()).isTrue();
     }
 
-    // -----------------------------------------------------------------------
-    // toResponseList(List<Todo>)
-    // -----------------------------------------------------------------------
-
     @Test
-    @DisplayName("toResponseList: converts each Todo in list to TodoResponse")
-    void toResponseList_convertsEachElement() {
-        List<Todo> todos = List.of(
-                Todo.builder().id(1L).title("First").completed(false).build(),
-                Todo.builder().id(2L).title("Second").completed(true).build()
-        );
+    @DisplayName("toResponse: maps null description to null in response")
+    void toResponse_nullDescription_mapsToNull() {
+        Todo todo = Todo.builder()
+                .id(2L)
+                .title("No desc")
+                .completed(false)
+                .build(); // no description
 
-        List<TodoResponse> result = TodoMapper.toResponseList(todos);
+        TodoResponse result = todoMapper.toResponse(todo);
 
-        assertThat(result).hasSize(2);
-        assertThat(result.get(0).getId()).isEqualTo(1L);
-        assertThat(result.get(0).getTitle()).isEqualTo("First");
-        assertThat(result.get(1).getId()).isEqualTo(2L);
-        assertThat(result.get(1).getTitle()).isEqualTo("Second");
-    }
-
-    @Test
-    @DisplayName("toResponseList: returns empty list when input is empty")
-    void toResponseList_emptyInput_returnsEmptyList() {
-        List<TodoResponse> result = TodoMapper.toResponseList(List.of());
-
-        assertThat(result).isEmpty();
+        assertThat(result.getId()).isEqualTo(2L);
+        assertThat(result.getTitle()).isEqualTo("No desc");
+        assertThat(result.getDescription()).isNull();
     }
 }

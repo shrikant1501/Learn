@@ -1,4 +1,3 @@
 com\learnjava\todo\TodoApplicationTest.class
-com\learnjava\todo\service\TodoMapperTest.class
 com\learnjava\todo\service\TodoServiceImplTest.class
 com\learnjava\todo\controller\TodoControllerTest.class
