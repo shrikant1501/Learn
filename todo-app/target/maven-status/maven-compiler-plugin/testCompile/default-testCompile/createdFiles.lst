@@ -1,9 +1,11 @@
 com\learnjava\todo\config\RedisCacheConfigTest.class
-com\learnjava\todo\TodoApplicationTest.class
+com\learnjava\todo\controller\AuthControllerRefreshTest.class
 com\learnjava\todo\integration\TodoIntegrationTest.class
 com\learnjava\todo\service\TodoServiceImplTest.class
 com\learnjava\todo\integration\AbstractIntegrationTest.class
-com\learnjava\todo\integration\AuthIntegrationTest.class
 com\learnjava\todo\actuator\TodoHealthIndicatorTest.class
 com\learnjava\todo\service\TodoCacheTest.class
+com\learnjava\todo\TodoApplicationTest.class
+com\learnjava\todo\integration\AuthIntegrationTest.class
 com\learnjava\todo\controller\TodoControllerTest.class
+com\learnjava\todo\security\RefreshTokenServiceImplTest.class

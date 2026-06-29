@@ -400,6 +400,7 @@
                         --add-opens java.base/java.lang=ALL-UNNAMED
                         --add-opens java.base/java.util=ALL-UNNAMED
                         --add-opens java.base/java.lang.reflect=ALL-UNNAMED
+                        --add-opens java.base/java.lang.invoke=ALL-UNNAMED
                         -DDOCKER_HOST=tcp://localhost:2375
                     </argLine>
                 </configuration>

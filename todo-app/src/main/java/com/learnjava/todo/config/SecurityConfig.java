@@ -55,7 +55,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints — no token required
                         .requestMatchers(
-                                "/api/v1/auth/**",          // register + login
+                                "/api/v1/auth/**",          // register, login, refresh, logout
                                 "/h2-console/**",           // H2 browser console (dev only)
                                 "/swagger-ui/**",           // Swagger UI SPA assets (JS, CSS)
                                 "/swagger-ui.html",         // redirects to /swagger-ui/index.html

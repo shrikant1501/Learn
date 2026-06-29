@@ -45,7 +45,8 @@ import static org.mockito.Mockito.when;
 @SpringBootTest
 @TestPropertySource(properties = {
         "jwt.secret=test-secret-key-for-unit-tests-only-32chars",
-        "jwt.expiration=86400000"
+        "jwt.expiration=900000",
+        "jwt.refresh-token-expiration=604800000"
 })
 class TodoCacheTest {
 

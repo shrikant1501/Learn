@@ -216,6 +216,28 @@ public class GlobalExceptionHandler {
     }
 
     // =========================================================================
+    // 401 UNAUTHORIZED — invalid or expired refresh token
+    // =========================================================================
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRefreshToken(
+            InvalidRefreshTokenException ex,
+            HttpServletRequest request) {
+
+        log.warn("Invalid refresh token at {}: {}", request.getRequestURI(), ex.getMessage());
+
+        ErrorResponse body = ErrorResponse.builder()
+                .status(HttpStatus.UNAUTHORIZED.value())    // 401
+                .error(HttpStatus.UNAUTHORIZED.name())      // "UNAUTHORIZED"
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+    }
+
+    // =========================================================================
     // 409 CONFLICT — username already taken during registration
     // =========================================================================
 
