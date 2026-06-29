@@ -4,11 +4,13 @@ com\learnjava\todo\dto\response\TodoResponse.class
 com\learnjava\todo\controller\TodoController.class
 com\learnjava\todo\dto\request\UpdateTodoRequest.class
 com\learnjava\todo\exception\TodoNotFoundException.class
+com\learnjava\todo\model\Auditable.class
 com\learnjava\todo\security\JwtServiceImpl.class
 com\learnjava\todo\dto\request\CreateTodoRequest$CreateTodoRequestBuilder.class
 com\learnjava\todo\TodoApplication.class
 com\learnjava\todo\dto\response\PagedResponse.class
 com\learnjava\todo\dto\auth\LoginRequest.class
+com\learnjava\todo\config\JpaConfig.class
 com\learnjava\todo\controller\AuthController.class
 com\learnjava\todo\service\TodoMapper.class
 com\learnjava\todo\dto\request\TodoFilterRequest.class

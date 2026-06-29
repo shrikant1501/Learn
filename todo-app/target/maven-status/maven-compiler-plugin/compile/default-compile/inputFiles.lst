@@ -1,4 +1,5 @@
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\exception\TodoNotFoundException.java
+C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\model\Auditable.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\dto\response\PagedResponse.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\controller\AuthController.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\config\SecurityConfig.java
@@ -16,6 +17,7 @@ C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\exception\GlobalExceptionHandler.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\security\JwtServiceImpl.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\exception\UsernameAlreadyExistsException.java
+C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\config\JpaConfig.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\dto\auth\AuthResponse.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\exception\ErrorResponse.java
 C:\Users\ShrikantThakre\Desktop\Learn\todo-app\src\main\java\com\learnjava\todo\dto\auth\RegisterRequest.java

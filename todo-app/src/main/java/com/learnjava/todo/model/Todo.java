@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 // @Entity — tells Hibernate "map this class to a database table"
@@ -19,7 +20,14 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor   // required by JPA — Hibernate needs a no-arg constructor to instantiate entities
 @AllArgsConstructor  // required by @Builder
-public class Todo {
+// callSuper = false — exclude Auditable's createdAt/updatedAt from equals/hashCode.
+// Entity identity is based on id (or business key), never on timestamps.
+// Including audit fields in equals would break collections and caches unexpectedly.
+@EqualsAndHashCode(callSuper = false)
+// extends Auditable — inherits createdAt and updatedAt columns.
+// Hibernate merges all fields from Auditable into the "todos" table automatically.
+// No separate table is created — that's the @MappedSuperclass contract.
+public class Todo extends Auditable {
 
     // @Id — marks this field as the primary key
     // @GeneratedValue(IDENTITY) — tells the DB to auto-increment the value

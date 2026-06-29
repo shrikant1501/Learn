@@ -8,6 +8,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 // MapStruct generates a class called TodoMapperImpl.
@@ -130,14 +132,19 @@ class TodoMapperTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("toResponse: maps all fields from Todo to TodoResponse")
+    @DisplayName("toResponse: maps all fields including audit timestamps from Todo to TodoResponse")
     void toResponse_mapsAllFields() {
+        LocalDateTime now = LocalDateTime.now();
         Todo todo = Todo.builder()
                 .id(1L)
                 .title("Learn JPA")
                 .description("Entities and repos")
                 .completed(true)
                 .build();
+        // Audit fields are set by AuditingEntityListener in production.
+        // In unit tests we set them directly via the setter inherited from Auditable.
+        todo.setCreatedAt(now);
+        todo.setUpdatedAt(now);
 
         TodoResponse result = todoMapper.toResponse(todo);
 
@@ -145,21 +152,27 @@ class TodoMapperTest {
         assertThat(result.getTitle()).isEqualTo("Learn JPA");
         assertThat(result.getDescription()).isEqualTo("Entities and repos");
         assertThat(result.getCompleted()).isTrue();
+        // Verify audit timestamps are carried through to the response
+        assertThat(result.getCreatedAt()).isEqualTo(now);
+        assertThat(result.getUpdatedAt()).isEqualTo(now);
     }
 
     @Test
-    @DisplayName("toResponse: maps null description to null in response")
+    @DisplayName("toResponse: maps null description to null, null audit fields to null")
     void toResponse_nullDescription_mapsToNull() {
         Todo todo = Todo.builder()
                 .id(2L)
                 .title("No desc")
                 .completed(false)
-                .build(); // no description
+                .build(); // description and audit fields not set
 
         TodoResponse result = todoMapper.toResponse(todo);
 
         assertThat(result.getId()).isEqualTo(2L);
         assertThat(result.getTitle()).isEqualTo("No desc");
         assertThat(result.getDescription()).isNull();
+        // Audit fields are null because AuditingEntityListener hasn't run
+        // (we're in a unit test with no Spring context)
+        assertThat(result.getCreatedAt()).isNull();
     }
 }

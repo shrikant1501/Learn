@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -26,7 +27,10 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class User implements UserDetails {
+@EqualsAndHashCode(callSuper = false)
+// extends Auditable — users table also gets created_at and updated_at.
+// Useful for: "when did this user register?", "when did they last update their profile?"
+public class User extends Auditable implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
