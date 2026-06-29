@@ -11,6 +11,7 @@ com\learnjava\todo\service\AuthService.class
 com\learnjava\todo\exception\UsernameAlreadyExistsException.class
 com\learnjava\todo\model\User.class
 com\learnjava\todo\model\Todo$TodoBuilder.class
+com\learnjava\todo\actuator\TodoHealthIndicator.class
 com\learnjava\todo\dto\response\PagedResponse$PagedResponseBuilder.class
 com\learnjava\todo\service\TodoService.class
 com\learnjava\todo\dto\auth\RegisterRequest.class

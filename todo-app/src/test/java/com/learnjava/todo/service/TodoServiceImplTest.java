@@ -8,11 +8,11 @@ import com.learnjava.todo.dto.response.TodoResponse;
 import com.learnjava.todo.model.Todo;
 import com.learnjava.todo.repository.TodoRepository;
 import com.learnjava.todo.service.impl.TodoServiceImpl;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -44,9 +44,11 @@ class TodoServiceImplTest {
     @Mock
     private TodoMapper todoMapper;
 
-    // @InjectMocks — Mockito creates a real TodoServiceImpl and injects both mocks above.
-    // TodoServiceImpl now has two constructor args (repository + mapper), Mockito handles both.
-    @InjectMocks
+    // We can no longer use @InjectMocks because TodoServiceImpl's constructor now also
+    // requires a MeterRegistry — which cannot be injected by Mockito as a @Mock
+    // (Counter.builder().register() needs a real registry, not a mock).
+    // SimpleMeterRegistry is Micrometer's lightweight in-memory implementation —
+    // perfect for unit tests: no Spring context, no I/O, just a plain Java object.
     private TodoServiceImpl todoService;
 
     private Todo sampleTodo;
@@ -54,6 +56,8 @@ class TodoServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // Build the service manually, supplying mocks + a real SimpleMeterRegistry.
+        todoService = new TodoServiceImpl(todoRepository, todoMapper, new SimpleMeterRegistry());
         sampleTodo = Todo.builder()
                 .id(1L)
                 .title("Learn Spring Boot")

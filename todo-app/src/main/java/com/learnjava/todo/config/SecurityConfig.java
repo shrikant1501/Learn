@@ -62,8 +62,16 @@ public class SecurityConfig {
                                 "/v3/api-docs",             // OpenAPI JSON root
                                 "/v3/api-docs/**",          // OpenAPI sub-paths (groups etc.)
                                 "/swagger-resources/**",    // SpringDoc internal resources
-                                "/webjars/**"               // Swagger UI webjar static files
+                                "/webjars/**",              // Swagger UI webjar static files
+                                // Actuator: health + info are public — load balancers and
+                                // Kubernetes liveness/readiness probes require no credentials.
+                                "/actuator/health/**",
+                                "/actuator/info"
                         ).permitAll()
+                        // Sensitive actuator endpoints require ADMIN role.
+                        // /actuator/metrics, /actuator/env, /actuator/loggers etc. reveal
+                        // internal configuration and performance data — restrict to admins.
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
                         // Every other request requires a valid JWT
                         .anyRequest().authenticated()
                 )

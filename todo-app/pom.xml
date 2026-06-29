@@ -80,6 +80,17 @@
         </dependency>
 
         <!--
+            SPRING BOOT ACTUATOR: production-readiness endpoints.
+            Exposes /actuator/health, /actuator/info, /actuator/metrics, and more.
+            Includes Micrometer — the metrics facade — which we use for Counters and Timers.
+            Version is managed by Spring Boot's parent BOM.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
             LOMBOK
             A compile-time annotation processor that generates boilerplate code:
               - @Getter / @Setter → generates getters and setters
