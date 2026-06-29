@@ -61,6 +61,7 @@
             1.5.x is the current stable series and supports Spring Boot 3 / Jakarta EE.
         -->
         <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <testcontainers.version>1.20.6</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -216,6 +217,51 @@
             <artifactId>flyway-core</artifactId>
         </dependency>
 
+        <!--
+            TESTCONTAINERS BOM (Bill of Materials): manages all Testcontainers module
+            versions in one place. By importing it as a 'pom' in dependencyManagement,
+            we can declare individual Testcontainers dependencies below without specifying
+            version numbers — they are all resolved from this single BOM entry.
+            This is the same pattern as Spring Boot's parent BOM, applied to a library family.
+        -->
+
+        <!--
+            testcontainers: the core library — manages container lifecycle (start, stop,
+            network, ports). Every Testcontainers project needs this as a foundation.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            testcontainers junit-jupiter: integrates Testcontainers with JUnit 5.
+            Provides @Testcontainers and @Container annotations that manage container
+            lifecycle automatically — container starts before the first test in the class,
+            stops after the last test. Without this, you'd manage lifecycle manually.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            testcontainers postgresql: the PostgreSQL-specific module.
+            Provides PostgreSQLContainer — a pre-configured container that knows the
+            correct image, default ports, readiness check, and JDBC URL format.
+            Without this, you'd have to configure all of that manually with GenericContainer.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -308,6 +354,7 @@
                         --add-opens java.base/java.lang=ALL-UNNAMED
                         --add-opens java.base/java.util=ALL-UNNAMED
                         --add-opens java.base/java.lang.reflect=ALL-UNNAMED
+                        -DDOCKER_HOST=tcp://localhost:2375
                     </argLine>
                 </configuration>
             </plugin>
