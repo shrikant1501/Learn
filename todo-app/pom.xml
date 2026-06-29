@@ -204,6 +204,18 @@
             <version>${mapstruct.version}</version>
         </dependency>
 
+        <!--
+            FLYWAY CORE: versioned database migration tool.
+            On startup, Flyway scans src/main/resources/db/migration/, compares the
+            version history table (flyway_schema_history) against available scripts,
+            and runs any new migrations in order. This replaces ddl-auto=update.
+            flyway-core works with any JDBC database; no extra adapter needed for H2 or PostgreSQL.
+        -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>
