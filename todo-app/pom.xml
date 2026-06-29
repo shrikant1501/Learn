@@ -126,10 +126,24 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
-        <!-- H2: in-memory relational database, zero install, resets on app restart -->
+        <!-- H2: in-memory relational database — used for local dev and unit tests.
+             Kept as 'runtime' scope so it's available during test execution.
+             When running with Docker (PostgreSQL), H2 is still used by unit tests
+             via the default application.properties — ensuring fast test runs. -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- PostgreSQL JDBC Driver — required when the app runs against a real PostgreSQL DB.
+             'runtime' scope: we only need it at runtime, not at compile time.
+             The JPA/JDBC API contracts are compile-time; the driver is runtime.
+             This is activated when SPRING_PROFILES_ACTIVE=docker or when running
+             with application-docker.properties. -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
 

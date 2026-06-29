@@ -1,0 +1,37 @@
+# .dockerignore — files excluded from the Docker build context
+# Docker sends the build context to the Docker daemon before building.
+# Excluding large/unnecessary files makes builds significantly faster.
+
+# Compiled output — the Dockerfile compiles the app itself inside the builder stage
+target/
+
+# IDE configuration files — not needed in the image
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# Git metadata
+.git/
+.gitignore
+
+# Docker files themselves (no need to copy them into the image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Maven wrapper (we install Maven directly in the Dockerfile)
+.mvn/
+mvnw
+mvnw.cmd
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Notes directory
+notes/

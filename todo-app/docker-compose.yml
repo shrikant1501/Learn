@@ -1,0 +1,86 @@
+# docker-compose.yml — defines the local development infrastructure
+# Run with:  docker compose up -d
+# Stop with: docker compose down
+# Logs with: docker compose logs -f
+
+services:
+
+  # ============================================================
+  # PostgreSQL — the production-grade relational database
+  # ============================================================
+  postgres:
+    # postgres:16-alpine — version 16, Alpine Linux base image.
+    # Alpine is a minimal Linux distro (~5MB). The full image is ~400MB.
+    # We pin the major version (16) so we don't get surprise upgrades.
+    image: postgres:16-alpine
+
+    # Container name — used by other containers to address this service
+    # and by docker compose commands (docker compose logs postgres)
+    container_name: todo-postgres
+
+    # Environment variables — PostgreSQL reads these on first startup
+    # to create the database, user, and password.
+    # In production: use Docker secrets or a vault, never plain text here.
+    environment:
+      POSTGRES_DB: tododb
+      POSTGRES_USER: todo_user
+      POSTGRES_PASSWORD: todo_pass
+
+    # Port mapping: host:container
+    # 5432:5432 means your app on the host can reach Postgres at localhost:5432
+    # The left side (host port) can be changed if 5432 is already in use.
+    ports:
+      - "5432:5432"
+
+    # Named volume — persists the database data between container restarts.
+    # Without this, all data is lost every time you do `docker compose down`.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    # Health check — Docker will mark the container as "healthy" only after
+    # PostgreSQL is ready to accept connections. Other services can depend on
+    # this health status using `depends_on: condition: service_healthy`.
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U todo_user -d tododb" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Spring Boot App — the todo-app service
+  # ============================================================
+  app:
+    # Build from the Dockerfile in the current directory (todo-app/)
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: todo-app
+
+    # The app depends on postgres being healthy before it starts.
+    # Spring Boot will still retry the DB connection, but this gives
+    # Postgres time to initialise before the JVM boots.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8080:8080"
+
+    # Pass database config to the Spring Boot app as environment variables.
+    # Spring Boot reads SPRING_DATASOURCE_URL etc. automatically —
+    # they override application.properties values at runtime.
+    # This is the 12-factor app pattern: config comes from the environment.
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tododb
+      SPRING_DATASOURCE_USERNAME: todo_user
+      SPRING_DATASOURCE_PASSWORD: todo_pass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+      # Tell Spring Boot to use the 'docker' profile — picks up application-docker.properties
+      SPRING_PROFILES_ACTIVE: docker
+
+# Named volumes declaration — Docker manages the physical storage location.
+# This persists even after `docker compose down` (use `docker compose down -v` to also remove volumes).
+volumes:
+  postgres_data:
