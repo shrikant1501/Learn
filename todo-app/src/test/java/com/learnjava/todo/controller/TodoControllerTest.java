@@ -16,6 +16,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -26,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -39,7 +42,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // This makes it fast and focused: we test the HTTP contract, not the business logic.
 //
 // @WebMvcTest(TodoController.class) — scope it to our one controller for even faster startup.
+// @WithMockUser at class level: every test method runs as an authenticated user
+// named "testuser" with role USER. Without this, Spring Security would reject all
+// requests with 401 since our SecurityConfig requires authentication for /api/v1/todos.
+// @WithMockUser does NOT hit the database — it injects a mock principal directly
+// into the SecurityContext, bypassing our JwtAuthenticationFilter entirely.
 @WebMvcTest(TodoController.class)
+@WithMockUser
+// Provide the JWT properties that JwtService needs via @Value — without these
+// the Spring context fails to start even in @WebMvcTest because JwtService is
+// a @Component that gets loaded as part of the security filter chain.
+@TestPropertySource(properties = {
+        "jwt.secret=test-secret-key-for-unit-tests-only-32chars",
+        "jwt.expiration=86400000"
+})
 class TodoControllerTest {
 
     // MockMvc — lets us send HTTP requests without starting a real server.
@@ -58,6 +74,15 @@ class TodoControllerTest {
     // This is different from @Mock (Mockito only) — @MockBean integrates with Spring.
     @MockBean
     private TodoService todoService;
+
+    // @WebMvcTest only loads the web layer — it does NOT load @Service or @Repository beans.
+    // JwtAuthenticationFilter (a @Component in the security chain) needs both JwtService and
+    // UserRepository. We must mock them so Spring can assemble the security filter chain.
+    @MockBean
+    private com.learnjava.todo.security.JwtService jwtService;
+
+    @MockBean
+    private com.learnjava.todo.repository.UserRepository userRepository;
 
     private TodoResponse sampleResponse;
 
@@ -168,9 +193,13 @@ class TodoControllerTest {
 
         when(todoService.createTodo(any(CreateTodoRequest.class))).thenReturn(created);
 
+        // .with(csrf()) — injects a valid CSRF token into the request.
+        // @WebMvcTest loads Spring Security's MockMvc integration which enforces CSRF
+        // by default, even though our SecurityConfig disables it for production.
+        // Without csrf(), POST/PUT/DELETE return 403 Forbidden in tests.
         mockMvc.perform(post("/api/v1/todos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        // objectMapper.writeValueAsString() converts the request object to JSON
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())                      // 201
                 .andExpect(jsonPath("$.id", is(4)))
@@ -190,6 +219,7 @@ class TodoControllerTest {
                 .build();
 
         mockMvc.perform(post("/api/v1/todos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -203,6 +233,7 @@ class TodoControllerTest {
     void createTodo_missingBody_returns400() throws Exception {
         // No .content() → no request body → Jackson throws HttpMessageNotReadableException
         mockMvc.perform(post("/api/v1/todos")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest());
     }
@@ -227,6 +258,7 @@ class TodoControllerTest {
                 .thenReturn(Optional.of(updated));
 
         mockMvc.perform(put("/api/v1/todos/1")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -245,6 +277,7 @@ class TodoControllerTest {
                 .thenReturn(Optional.empty());
 
         mockMvc.perform(put("/api/v1/todos/99")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound());
@@ -258,6 +291,7 @@ class TodoControllerTest {
                 .build();
 
         mockMvc.perform(put("/api/v1/todos/1")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -273,7 +307,7 @@ class TodoControllerTest {
     void deleteTodo_found_returns204() throws Exception {
         when(todoService.deleteTodo(1L)).thenReturn(true);
 
-        mockMvc.perform(delete("/api/v1/todos/1"))
+        mockMvc.perform(delete("/api/v1/todos/1").with(csrf()))
                 .andExpect(status().isNoContent());  // 204 — no body
 
         verify(todoService).deleteTodo(1L);
@@ -284,7 +318,7 @@ class TodoControllerTest {
     void deleteTodo_notFound_returns404() throws Exception {
         when(todoService.deleteTodo(99L)).thenReturn(false);
 
-        mockMvc.perform(delete("/api/v1/todos/99"))
+        mockMvc.perform(delete("/api/v1/todos/99").with(csrf()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status", is(404)));
     }

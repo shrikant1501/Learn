@@ -106,6 +106,15 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- spring-security-test: provides @WithMockUser, SecurityMockMvcRequestPostProcessors,
+             and other test utilities for Spring Security integration tests.
+             Without this, @WithMockUser annotation is not available. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Spring Data JPA: ORM support, JpaRepository, @Transactional management -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -134,6 +143,33 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.5.0</version>
+        </dependency>
+
+        <!-- Spring Security: authentication, authorization, filter chain -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- JJWT: Java JWT library for generating and validating JWT tokens.
+             Three jars needed: api (the interfaces), impl (the implementation),
+             and jackson (for JSON serialization of claims). -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.5</version>
+            <scope>runtime</scope>
         </dependency>
 
     </dependencies>
@@ -187,6 +223,27 @@
                             <version>${lombok.version}</version>
                         </path>
                     </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <!--
+                MAVEN SUREFIRE PLUGIN
+                Configures how Maven runs unit tests.
+                On Java 23+, ByteBuddy (used by Mockito to create mock subclasses) cannot
+                instrument java.lang.Object and core JDK classes unless we explicitly open
+                the relevant internal packages to the unnamed module at test runtime.
+                Without these argLine settings, @MockBean on concrete @Service classes like
+                JwtService throws "Could not modify all classes" and tests fail to load context.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>
+                        --add-opens java.base/java.lang=ALL-UNNAMED
+                        --add-opens java.base/java.util=ALL-UNNAMED
+                        --add-opens java.base/java.lang.reflect=ALL-UNNAMED
+                    </argLine>
                 </configuration>
             </plugin>
 

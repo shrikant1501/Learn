@@ -216,6 +216,28 @@ public class GlobalExceptionHandler {
     }
 
     // =========================================================================
+    // 409 CONFLICT — username already taken during registration
+    // =========================================================================
+
+    @ExceptionHandler(UsernameAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleUsernameAlreadyExists(
+            UsernameAlreadyExistsException ex,
+            HttpServletRequest request) {
+
+        log.warn("Registration conflict at {}: {}", request.getRequestURI(), ex.getMessage());
+
+        ErrorResponse body = ErrorResponse.builder()
+                .status(HttpStatus.CONFLICT.value())        // 409
+                .error(HttpStatus.CONFLICT.name())          // "CONFLICT"
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    // =========================================================================
     // 500 INTERNAL SERVER ERROR — catch-all safety net
     // =========================================================================
 
