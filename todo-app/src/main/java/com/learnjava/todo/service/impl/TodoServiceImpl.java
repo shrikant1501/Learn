@@ -1,5 +1,6 @@
 package com.learnjava.todo.service.impl;
 
+import com.learnjava.todo.config.CacheConfig;
 import com.learnjava.todo.dto.request.CreateTodoRequest;
 import com.learnjava.todo.dto.request.TodoFilterRequest;
 import com.learnjava.todo.dto.request.UpdateTodoRequest;
@@ -12,6 +13,8 @@ import com.learnjava.todo.service.TodoService;
 import com.learnjava.todo.service.TodoSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -58,48 +61,58 @@ public class TodoServiceImpl implements TodoService {
                 .build();
     }
 
+    // @Cacheable: before this method runs, Spring checks the "todos" cache for a key = id.
+    //   Cache HIT  → return the cached TodoResponse immediately (DB never called).
+    //   Cache MISS → call the method, store the returned Optional in the cache, return it.
+    //
+    // The cache key is the method parameter 'id' by default.
+    // Spring caches the full return value — including Optional.empty() for not-found ids.
+    // This prevents repeated DB lookups for ids that don't exist.
     @Override
+    @Cacheable(value = CacheConfig.TODOS_CACHE, key = "#id")
     @Transactional(readOnly = true)
     public Optional<TodoResponse> getTodoById(Long id) {
-        log.debug("Looking up todo with id: {}", id);
+        log.debug("Cache MISS — loading todo {} from database", id);
         return todoRepository.findById(id)
                 .map(todoMapper::toResponse);
     }
 
+    // No cache annotation here — createTodo assigns a new ID that was never in the cache.
+    // There is no existing entry to evict and no reason to pre-populate the cache on create.
     @Override
     public TodoResponse createTodo(CreateTodoRequest request) {
         log.debug("Creating todo with title: {}", request.getTitle());
-        // todoMapper.toModel() is MapStruct-generated — same logic as before,
-        // but now auto-generated from the @Mapping annotations on the interface.
         Todo todo = todoMapper.toModel(request);
         Todo saved = todoRepository.save(todo);
         log.debug("Created todo with id: {}", saved.getId());
         return todoMapper.toResponse(saved);
     }
 
+    // @CacheEvict: after this method completes, remove the entry for 'id' from "todos" cache.
+    // WHY evict on update? The cached TodoResponse for this id is now stale — it holds
+    // the OLD data. The next getTodoById(id) call must miss the cache and reload from DB.
+    //
+    // key = "#id" — SpEL expression that resolves to the method's 'id' parameter.
+    // beforeInvocation = false (default) — evict AFTER the method succeeds.
+    //   If the update throws an exception, the cache entry is preserved (still valid).
     @Override
+    @CacheEvict(value = CacheConfig.TODOS_CACHE, key = "#id")
     public Optional<TodoResponse> updateTodo(Long id, UpdateTodoRequest request) {
-        log.debug("Attempting to update todo with id: {}", id);
-
-        // IMPROVED PATTERN with @MappingTarget:
-        // 1. Load the existing entity from DB (or return empty if not found)
-        // 2. Apply the request fields ON TOP of the existing entity — in place
-        // 3. Save — Hibernate sees the dirty fields and issues a minimal UPDATE
-        //
-        // This is better than the old approach (creating a new Todo with the id)
-        // because it preserves any fields NOT in UpdateTodoRequest (e.g., createdAt
-        // in Phase 12, or any future fields we don't want overwritten on update).
+        log.debug("Updating todo {} — evicting from cache", id);
         return todoRepository.findById(id)
                 .map(existingTodo -> {
-                    todoMapper.updateModel(existingTodo, request); // mutates existingTodo
+                    todoMapper.updateModel(existingTodo, request);
                     Todo saved = todoRepository.save(existingTodo);
                     return todoMapper.toResponse(saved);
                 });
     }
 
+    // @CacheEvict: after deletion, remove the entry for this id.
+    // If not evicted, future getTodoById(id) calls would return the deleted todo from cache.
     @Override
+    @CacheEvict(value = CacheConfig.TODOS_CACHE, key = "#id")
     public boolean deleteTodo(Long id) {
-        log.debug("Attempting to delete todo with id: {}", id);
+        log.debug("Deleting todo {} — evicting from cache", id);
         if (!todoRepository.existsById(id)) {
             return false;
         }

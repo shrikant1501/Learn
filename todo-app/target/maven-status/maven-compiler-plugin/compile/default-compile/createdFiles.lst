@@ -31,6 +31,7 @@ com\learnjava\todo\model\Role.class
 com\learnjava\todo\exception\ErrorResponse$ErrorResponseBuilder.class
 com\learnjava\todo\model\Todo.class
 com\learnjava\todo\dto\request\UpdateTodoRequest$UpdateTodoRequestBuilder.class
+com\learnjava\todo\config\CacheConfig.class
 com\learnjava\todo\service\impl\TodoServiceImpl.class
 com\learnjava\todo\service\TodoSpecification.class
 com\learnjava\todo\dto\auth\AuthResponse.class

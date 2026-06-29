@@ -206,6 +206,29 @@
         </dependency>
 
         <!--
+            SPRING CACHE STARTER: activates Spring's Cache Abstraction (@EnableCaching,
+            @Cacheable, @CacheEvict, @CachePut). It provides the annotations and the
+            CacheManager interface but ships with only a simple ConcurrentHashMap cache.
+            Caffeine (below) replaces that with a production-grade in-memory cache engine.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+
+        <!--
+            CAFFEINE: high-performance in-memory cache for the JVM.
+            Implements the W-TinyLFU eviction algorithm — near-optimal hit rate.
+            Spring Boot's CaffeineCacheManager auto-configures when Caffeine is on the
+            classpath and spring-boot-starter-cache is present.
+            Version is managed by Spring Boot's BOM — no explicit version needed.
+        -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!--
             FLYWAY CORE: versioned database migration tool.
             On startup, Flyway scans src/main/resources/db/migration/, compares the
             version history table (flyway_schema_history) against available scripts,
